@@ -58,7 +58,7 @@ export default function Interviewers() {
           }}
         >
           <strong style={{ color: 'var(--accent)' }}>Demo mode:</strong> Cloud UI cannot reach the ALB API yet.
-          Try search <strong>Alice</strong>, <strong>Bob</strong>, or <strong>Google</strong>.
+          Try search <strong>Damith</strong>, <strong>Alice</strong>, or <strong>Google</strong>.
           For full search with your database, run locally: <code>docker compose up</code> and{' '}
           <code>npm run dev</code>.
         </div>

@@ -50,6 +50,20 @@ export const DEMO_INTERVIEWERS = [
     experience_level: 'Principal',
     availability: 'Flexible',
   },
+  {
+    id: 'demo-damith',
+    name: 'Damith Jayawardhane',
+    email: 'damith@hiresphere.com',
+    role: 'interviewer',
+    bio: 'SLIIT interviewer — cloud & full-stack mock interviews.',
+    company: 'HireSphere',
+    skills: 'Java, React, AWS, System Design',
+    rate: 65,
+    domain: 'Backend',
+    interview_types: 'DSA, Behavioral, System Design',
+    experience_level: 'Senior',
+    availability: 'Weekday evenings',
+  },
 ]
 
 export function setApiAuthToken(token) {
