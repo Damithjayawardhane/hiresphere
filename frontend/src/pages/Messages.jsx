@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import { api } from '../api'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -25,13 +25,13 @@ export default function Messages() {
       setThread([])
       return
     }
-    axios.get(`/messages?with=${encodeURIComponent(withId)}`).then(r => setThread(r.data)).catch(() => setThread([]))
+    api.get(`/messages?with=${encodeURIComponent(withId)}`).then(r => setThread(r.data)).catch(() => setThread([]))
   }, [withId])
 
   async function send(e) {
     e.preventDefault()
     if (!withId || !body.trim()) return
-    const res = await axios.post('/messages', { to_id: withId, body })
+    const res = await api.post('/messages', { to_id: withId, body })
     setThread(prev => [...prev, res.data])
     setBody('')
   }

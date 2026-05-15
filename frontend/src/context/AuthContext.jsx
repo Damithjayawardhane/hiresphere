@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import axios from 'axios'
+import { api, API_BASE, setApiAuthToken } from '../api'
 import {
   signIn as amplifySignIn,
   signUp as amplifySignUp,
@@ -12,10 +12,6 @@ import {
 import { configureAmplify, isCognitoConfigured } from '../amplify-config'
 
 const AuthContext = createContext(null)
-
-const API =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
-  (typeof window !== 'undefined' ? window.location.origin : '')
 
 function authHeaderFromSession(session) {
   const tok = session?.tokens?.idToken
@@ -36,17 +32,17 @@ async function userFromCognitoAttributes() {
 }
 
 function canCallBackendApi() {
-  if (!API) return false
+  if (!API_BASE) return false
   if (typeof window === 'undefined') return true
   // Browsers block HTTPS pages from calling HTTP APIs (mixed content).
-  if (window.location.protocol === 'https:' && API.startsWith('http://')) return false
+  if (window.location.protocol === 'https:' && API_BASE.startsWith('http://')) return false
   return true
 }
 
 async function syncCognitoProfile(idToken, body = {}) {
   if (!canCallBackendApi()) return userFromCognitoAttributes()
   try {
-    const res = await axios.post(`${API}/auth/cognito-sync`, body, {
+    const res = await api.post('/auth/cognito-sync', body, {
       headers: { Authorization: `Bearer ${idToken}` },
     })
     return res.data.user
@@ -111,7 +107,7 @@ export function AuthProvider({ children }) {
               if (!cancelled) {
                 setToken(idToken)
                 setUser(u)
-                axios.defaults.headers.common['Authorization'] = `Bearer ${idToken}`
+                setApiAuthToken(idToken)
               }
             } catch {
               await clearCognitoSession()
@@ -129,7 +125,7 @@ export function AuthProvider({ children }) {
       if (savedToken && savedUser) {
         setToken(savedToken)
         setUser(JSON.parse(savedUser))
-        axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`
+        setApiAuthToken(savedToken)
       }
       if (!cancelled) setLoading(false)
     }
@@ -175,7 +171,7 @@ export function AuthProvider({ children }) {
         sessionStorage.removeItem('pendingCognitoProfile')
         setToken(idToken)
         setUser(u)
-        axios.defaults.headers.common['Authorization'] = `Bearer ${idToken}`
+        setApiAuthToken(idToken)
         return { user: u, needsConfirm: false }
       }
       if (nextStep?.signUpStep === 'CONFIRM_SIGN_UP') {
@@ -184,7 +180,7 @@ export function AuthProvider({ children }) {
       return { user: null, needsConfirm: false }
     }
 
-    const res = await axios.post(`${API}/auth/register`, {
+    const res = await api.post('/auth/register', {
       name,
       email,
       password,
@@ -222,10 +218,10 @@ export function AuthProvider({ children }) {
       sessionStorage.removeItem('pendingCognitoProfile')
       setToken(idToken)
       setUser(u)
-      axios.defaults.headers.common['Authorization'] = `Bearer ${idToken}`
+      setApiAuthToken(idToken)
       return { user: u }
     }
-    const res = await axios.post(`${API}/auth/login`, { email, password })
+    const res = await api.post('/auth/login', { email, password })
     _storeSession(res.data)
     return res.data
   }
@@ -236,7 +232,7 @@ export function AuthProvider({ children }) {
     }
     localStorage.removeItem('hs_token')
     localStorage.removeItem('hs_user')
-    delete axios.defaults.headers.common['Authorization']
+    setApiAuthToken(null)
     setUser(null)
     setToken(null)
   }
@@ -244,7 +240,7 @@ export function AuthProvider({ children }) {
   function _storeSession({ token: t, user: u }) {
     localStorage.setItem('hs_token', t)
     localStorage.setItem('hs_user', JSON.stringify(u))
-    axios.defaults.headers.common['Authorization'] = `Bearer ${t}`
+    setApiAuthToken(t)
     setToken(t)
     setUser(u)
   }

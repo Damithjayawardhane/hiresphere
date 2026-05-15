@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import { api } from '../api'
 
 function ScoreSlider({ label, value, onChange }) {
   const color = value >= 8 ? 'var(--success)' : value >= 5 ? 'var(--warning)' : 'var(--accent2)'
@@ -31,7 +31,7 @@ export default function FeedbackForm() {
     setError('')
     setLoading(true)
     try {
-      await axios.post('/feedback', { ...form, booking_id: bookingId, candidate_id: candidateId })
+      await api.post('/feedback', { ...form, booking_id: bookingId, candidate_id: candidateId })
       navigate('/bookings')
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to submit feedback')

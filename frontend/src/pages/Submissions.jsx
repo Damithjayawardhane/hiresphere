@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import axios from 'axios'
+import { api } from '../api'
 import { Link } from 'react-router-dom'
 
 export default function Submissions() {
@@ -12,7 +12,7 @@ export default function Submissions() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    axios
+    api
       .get('/submissions')
       .then(r => setItems(r.data))
       .catch(() => {})
@@ -28,7 +28,7 @@ export default function Submissions() {
       if (githubUrl) fd.append('github_url', githubUrl)
       if (notes) fd.append('notes', notes)
       if (file) fd.append('file', file)
-      const res = await axios.post('/submissions', fd)
+      const res = await api.post('/submissions', fd)
       setItems(prev => [res.data, ...prev])
       setGithubUrl('')
       setNotes('')

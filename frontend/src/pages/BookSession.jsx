@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import { api } from '../api'
 
 const SESSION_TYPES = ['DSA', 'System Design', 'Frontend', 'Behavioural', 'Full Stack']
 
@@ -17,7 +17,7 @@ export default function BookSession() {
   const [payError, setPayError] = useState('')
 
   useEffect(() => {
-    axios.get(`/auth/users/${interviewerId}`).then((r) => setInterviewer(r.data)).catch(() => {})
+    api.get(`/auth/users/${interviewerId}`).then((r) => setInterviewer(r.data)).catch(() => {})
   }, [interviewerId])
 
   async function handleSubmit(e) {
@@ -26,7 +26,7 @@ export default function BookSession() {
     setLoading(true)
     try {
       const price = (interviewer?.rate || 60) * (form.duration_mins / 60)
-      const res = await axios.post('/bookings', {
+      const res = await api.post('/bookings', {
         ...form,
         interviewer_id: interviewerId,
         price,
@@ -44,7 +44,7 @@ export default function BookSession() {
     setPayError('')
     setPaying(true)
     try {
-      await axios.post(`/bookings/${createdBooking.id}/pay`, { card_number: cardNumber })
+      await api.post(`/bookings/${createdBooking.id}/pay`, { card_number: cardNumber })
       navigate('/bookings')
     } catch (err) {
       setPayError(err.response?.data?.error || 'Payment failed')

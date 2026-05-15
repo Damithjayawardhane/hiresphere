@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
+import { fetchInterviewers } from '../api'
 
 const DOMAINS = ['', 'Backend', 'Frontend', 'DevOps', 'AI/ML', 'Mobile']
 const LEVELS = ['', 'Senior', 'Staff', 'Principal']
 
 export default function Interviewers() {
   const [interviewers, setInterviewers] = useState([])
+  const [usingDemo, setUsingDemo] = useState(false)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [domain, setDomain] = useState('')
@@ -14,10 +15,11 @@ export default function Interviewers() {
   const [interviewType, setInterviewType] = useState('')
 
   useEffect(() => {
-    axios
-      .get('/auth/users?role=interviewer')
-      .then(r => setInterviewers(r.data))
-      .catch(() => {})
+    fetchInterviewers()
+      .then(({ list, demo }) => {
+        setInterviewers(list)
+        setUsingDemo(demo)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -42,6 +44,25 @@ export default function Interviewers() {
       <p style={{ color: 'var(--muted)', marginBottom: 20, maxWidth: 720 }}>
         Filter by domain, interview type, and experience level (assignment-aligned search).
       </p>
+
+      {usingDemo && (
+        <div
+          style={{
+            background: 'rgba(108,99,255,0.08)',
+            border: '1px solid rgba(108,99,255,0.2)',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 20,
+            fontSize: 13,
+            color: 'var(--muted)',
+          }}
+        >
+          <strong style={{ color: 'var(--accent)' }}>Demo mode:</strong> Cloud UI cannot reach the ALB API yet.
+          Try search <strong>Alice</strong>, <strong>Bob</strong>, or <strong>Google</strong>.
+          For full search with your database, run locally: <code>docker compose up</code> and{' '}
+          <code>npm run dev</code>.
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24, alignItems: 'flex-end' }}>
         <div className="form-group" style={{ marginBottom: 0, minWidth: 200, flex: '1 1 200px' }}>
@@ -79,7 +100,12 @@ export default function Interviewers() {
         </div>
       </div>
 
-      {filtered.length === 0 && <p style={{ color: 'var(--muted)' }}>No interviewers match your filters.</p>}
+      {filtered.length === 0 && (
+        <p style={{ color: 'var(--muted)' }}>
+          No interviewers match your filters.
+          {usingDemo && search ? ' Try Alice, Bob, or Carol.' : ''}
+        </p>
+      )}
 
       <div className="grid-2">
         {filtered.map(iv => (
@@ -92,7 +118,7 @@ export default function Interviewers() {
               {iv.rate != null && (
                 <div style={{ color: 'var(--success)', fontWeight: 600, fontSize: 15 }}>
                   ${iv.rate}
-                  <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>/hr</span>
+                  <div style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>/hr</div>
                 </div>
               )}
             </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import axios from 'axios'
+import { api } from '../api'
 
 export default function MyBookings() {
   const { user } = useAuth()
@@ -15,7 +15,7 @@ export default function MyBookings() {
   const [paying, setPaying] = useState(false)
 
   function load() {
-    Promise.all([axios.get('/bookings'), axios.get('/auth/users')])
+    Promise.all([api.get('/bookings'), api.get('/auth/users')])
       .then(([bRes, uRes]) => {
         setBookings(bRes.data)
         const map = {}
@@ -34,7 +34,7 @@ export default function MyBookings() {
 
   async function updateStatus(id, status) {
     try {
-      const res = await axios.patch(`/bookings/${id}/status`, { status })
+      const res = await api.patch(`/bookings/${id}/status`, { status })
       setBookings((prev) => prev.map((b) => (b.id === id ? res.data : b)))
     } catch {}
   }
@@ -43,7 +43,7 @@ export default function MyBookings() {
     setPayError('')
     setPaying(true)
     try {
-      const res = await axios.post(`/bookings/${id}/pay`, { card_number: cardNumber })
+      const res = await api.post(`/bookings/${id}/pay`, { card_number: cardNumber })
       setBookings((prev) => prev.map((b) => (b.id === id ? res.data.booking : b)))
       setPayId(null)
     } catch (err) {
