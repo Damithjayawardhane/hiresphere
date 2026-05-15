@@ -28,6 +28,9 @@ services:
       - SECRET_KEY=hiresphere-prod-secret-change-me
       - DATABASE_URL=sqlite:////data/auth.db
       - FLASK_DEBUG=0
+      - COGNITO_USER_POOL_ID=us-east-1_ogGrgkt1q
+      - COGNITO_APP_CLIENT_ID=34isv5k5ht4tpabm961gr56v60
+      - AWS_REGION=us-east-1
     volumes:
       - auth-db:/data
     ports:
@@ -56,6 +59,9 @@ services:
       - SECRET_KEY=hiresphere-prod-secret-change-me
       - DATABASE_URL=sqlite:////data/booking.db
       - AUTH_SERVICE_URL=http://auth-service:5001
+      - COGNITO_USER_POOL_ID=us-east-1_ogGrgkt1q
+      - COGNITO_APP_CLIENT_ID=34isv5k5ht4tpabm961gr56v60
+      - AWS_REGION=us-east-1
       - FLASK_DEBUG=0
     volumes:
       - booking-db:/data
@@ -88,6 +94,9 @@ services:
       - SECRET_KEY=hiresphere-prod-secret-change-me
       - DATABASE_URL=sqlite:////data/interview.db
       - UPLOAD_DIR=/data/uploads
+      - COGNITO_USER_POOL_ID=us-east-1_ogGrgkt1q
+      - COGNITO_APP_CLIENT_ID=34isv5k5ht4tpabm961gr56v60
+      - AWS_REGION=us-east-1
       - FLASK_DEBUG=0
     volumes:
       - interview-db:/data

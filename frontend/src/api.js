@@ -71,12 +71,34 @@ export function setApiAuthToken(token) {
   else delete api.defaults.headers.common.Authorization
 }
 
+export function isLocalDev() {
+  if (typeof window === 'undefined') return false
+  const h = window.location.hostname
+  return h === 'localhost' || h === '127.0.0.1'
+}
+
+export function isCloudAmplifyHost() {
+  if (typeof window === 'undefined') return false
+  return window.location.hostname.includes('amplifyapp.com')
+}
+
+/** Real data from auth-service; demo list only on cloud when ALB API is unreachable. */
 export async function fetchInterviewers() {
   try {
     const { data } = await api.get('/auth/users', { params: { role: 'interviewer' } })
-    if (Array.isArray(data) && data.length > 0) return { list: data, demo: false }
-  } catch {
-    /* backend unreachable */
+    if (Array.isArray(data)) return { list: data, demo: false }
+  } catch (err) {
+    if (isLocalDev()) {
+      throw new Error(
+        'Cannot reach API at ' +
+          (API_BASE || 'localhost') +
+          '. Run: docker compose up -d (gateway http://localhost:8080)'
+      )
+    }
+    if (isCloudAmplifyHost()) {
+      return { list: DEMO_INTERVIEWERS, demo: true }
+    }
+    throw err
   }
-  return { list: DEMO_INTERVIEWERS, demo: true }
+  return { list: [], demo: false }
 }

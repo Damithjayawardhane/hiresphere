@@ -13,12 +13,17 @@ export default function Interviewers() {
   const [domain, setDomain] = useState('')
   const [experienceLevel, setExperienceLevel] = useState('')
   const [interviewType, setInterviewType] = useState('')
+  const [error, setError] = useState('')
 
   useEffect(() => {
     fetchInterviewers()
       .then(({ list, demo }) => {
         setInterviewers(list)
         setUsingDemo(demo)
+      })
+      .catch(err => {
+        setInterviewers([])
+        setError(err.message || 'Failed to load interviewers')
       })
       .finally(() => setLoading(false))
   }, [])
@@ -44,6 +49,8 @@ export default function Interviewers() {
       <p style={{ color: 'var(--muted)', marginBottom: 20, maxWidth: 720 }}>
         Filter by domain, interview type, and experience level (assignment-aligned search).
       </p>
+
+      {error && <p className="error-msg" style={{ marginBottom: 16 }}>{error}</p>}
 
       {usingDemo && (
         <div

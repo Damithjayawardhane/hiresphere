@@ -6,12 +6,12 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/auth': 'http://localhost:5001',
-      '/bookings': 'http://localhost:5002',
-      '/feedback': 'http://localhost:5003',
-      '/submissions': 'http://localhost:5003',
-      '/messages': 'http://localhost:5003',
-      '/socket.io': { target: 'http://localhost:5003', ws: true }
-    }
+      '/auth': 'http://localhost:8080',
+      '/bookings': 'http://localhost:8080',
+      '/feedback': 'http://localhost:8080',
+      '/submissions': 'http://localhost:8080',
+      '/messages': 'http://localhost:8080',
+      '/socket.io': { target: 'http://localhost:8080', ws: true },
+    },
   }
 })
