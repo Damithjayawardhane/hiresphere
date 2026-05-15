@@ -13,7 +13,7 @@ export default function Messages() {
 
   useEffect(() => {
     const role = user?.role === 'candidate' ? 'interviewer' : 'candidate'
-    axios
+    api
       .get(`/auth/users?role=${role}`)
       .then(r => setContacts(r.data))
       .catch(() => {})
