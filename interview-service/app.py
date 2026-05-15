@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.utils import secure_filename
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func, inspect, text
 import datetime, os, uuid
 
 from cognito_jwt import verify_bearer_token
@@ -53,12 +53,19 @@ class ChallengeSubmission(db.Model):
     github_url   = db.Column(db.String(500), default='')
     file_name    = db.Column(db.String(260), default='')
     notes        = db.Column(db.Text, default='')
+    annotation   = db.Column(db.Text, default='')
+    annotated_by = db.Column(db.String(36), default='')
+    annotated_at = db.Column(db.DateTime, nullable=True)
     created_at   = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     def to_dict(self):
-        return {'id': self.id, 'candidate_id': self.candidate_id, 'booking_id': self.booking_id,
-                'github_url': self.github_url, 'file_name': self.file_name, 'notes': self.notes,
-                'created_at': self.created_at.isoformat()}
+        return {
+            'id': self.id, 'candidate_id': self.candidate_id, 'booking_id': self.booking_id,
+            'github_url': self.github_url, 'file_name': self.file_name, 'notes': self.notes,
+            'annotation': self.annotation, 'annotated_by': self.annotated_by,
+            'annotated_at': self.annotated_at.isoformat() if self.annotated_at else None,
+            'created_at': self.created_at.isoformat(),
+        }
 
 
 class Message(db.Model):
@@ -125,16 +132,78 @@ def feedback_by_booking(booking_id):
     return jsonify(fb.to_dict())
 
 
+def migrate_schema():
+    insp = inspect(db.engine)
+    if not insp.has_table('challenge_submission'):
+        return
+    cols = {c['name'] for c in insp.get_columns('challenge_submission')}
+    alters = []
+    for col, sql in [
+        ('annotation', "ALTER TABLE challenge_submission ADD COLUMN annotation TEXT DEFAULT ''"),
+        ('annotated_by', "ALTER TABLE challenge_submission ADD COLUMN annotated_by VARCHAR(36) DEFAULT ''"),
+        ('annotated_at', 'ALTER TABLE challenge_submission ADD COLUMN annotated_at DATETIME'),
+    ]:
+        if col not in cols:
+            alters.append(sql)
+    if alters:
+        with db.engine.begin() as conn:
+            for sql in alters:
+                conn.execute(text(sql))
+
+
+@app.route('/ratings/interviewers', methods=['GET'])
+def interviewer_ratings():
+    rows = (
+        db.session.query(
+            FeedbackReport.interviewer_id,
+            func.avg(FeedbackReport.overall_score).label('avg'),
+            func.count(FeedbackReport.id).label('cnt'),
+        )
+        .group_by(FeedbackReport.interviewer_id)
+        .all()
+    )
+    out = {}
+    for iid, avg, cnt in rows:
+        avg_f = round(float(avg or 0), 1)
+        badges = []
+        if cnt >= 5:
+            badges.append('Top Rated')
+        if avg_f >= 4.5:
+            badges.append('Expert')
+        if avg_f >= 4.0 and 'Expert' not in badges:
+            badges.append('Highly Rated')
+        out[iid] = {'rating_avg': avg_f, 'rating_count': int(cnt), 'badges': badges}
+    return jsonify(out)
+
+
 @app.route('/submissions', methods=['GET'])
 def list_submissions():
     user = get_current_user()
     if not user:
         return jsonify({'error': 'Unauthorized'}), 401
-    if user['role'] != 'candidate':
-        return jsonify({'error': 'Only candidates have submissions'}), 403
+    if user['role'] == 'interviewer':
+        rows = ChallengeSubmission.query.order_by(ChallengeSubmission.created_at.desc()).limit(100).all()
+        return jsonify([r.to_dict() for r in rows])
     rows = ChallengeSubmission.query.filter_by(candidate_id=user['sub']).order_by(
         ChallengeSubmission.created_at.desc()).all()
     return jsonify([r.to_dict() for r in rows])
+
+
+@app.route('/submissions/<submission_id>/annotate', methods=['PATCH'])
+def annotate_submission(submission_id):
+    user = get_current_user()
+    if not user or user['role'] != 'interviewer':
+        return jsonify({'error': 'Only interviewers can annotate'}), 403
+    row = ChallengeSubmission.query.get_or_404(submission_id)
+    data = request.get_json() or {}
+    text_body = (data.get('annotation') or '').strip()
+    if not text_body:
+        return jsonify({'error': 'annotation text required'}), 400
+    row.annotation = text_body[:10000]
+    row.annotated_by = user['sub']
+    row.annotated_at = datetime.datetime.utcnow()
+    db.session.commit()
+    return jsonify(row.to_dict())
 
 
 @app.route('/submissions', methods=['POST'])
@@ -265,5 +334,6 @@ def on_cursor(data):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        migrate_schema()
     debug = os.environ.get('FLASK_DEBUG', '0') == '1'
     socketio.run(app, host='0.0.0.0', port=5003, debug=debug, allow_unsafe_werkzeug=True)

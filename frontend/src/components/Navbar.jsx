@@ -49,6 +49,16 @@ export default function Navbar() {
               Submissions
             </Link>
           )}
+          {user.role === 'interviewer' && (
+            <>
+              <Link to="/submissions" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/submissions') }}>
+                Review Submissions
+              </Link>
+              <Link to="/packages" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/packages') }}>
+                Packages
+              </Link>
+            </>
+          )}
         </div>
       )}
 

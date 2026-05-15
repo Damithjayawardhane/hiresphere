@@ -1,0 +1,47 @@
+[
+  {
+    "source": "/auth/<*>",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/auth/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/bookings<*>",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/bookings<*>",
+    "status": "200"
+  },
+  {
+    "source": "/packages<*>",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/packages<*>",
+    "status": "200"
+  },
+  {
+    "source": "/feedback<*>",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/feedback<*>",
+    "status": "200"
+  },
+  {
+    "source": "/submissions<*>",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/submissions<*>",
+    "status": "200"
+  },
+  {
+    "source": "/messages<*>",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/messages<*>",
+    "status": "200"
+  },
+  {
+    "source": "/ratings/<*>",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/ratings/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/health",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/health",
+    "status": "200"
+  },
+  {
+    "source": "/socket.io/<*>",
+    "target": "http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com/socket.io/<*>",
+    "status": "200"
+  }
+]

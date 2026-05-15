@@ -30,6 +30,7 @@ class User(db.Model):
     interview_types   = db.Column(db.String(200), default='')
     experience_level  = db.Column(db.String(40), default='')
     availability      = db.Column(db.String(200), default='')
+    badges            = db.Column(db.String(300), default='')
 
     def to_dict(self):
         return {
@@ -38,6 +39,7 @@ class User(db.Model):
             'skills': self.skills, 'rate': self.rate,
             'domain': self.domain, 'interview_types': self.interview_types,
             'experience_level': self.experience_level, 'availability': self.availability,
+            'badges': self.badges,
             'created_at': self.created_at.isoformat()
         }
 
@@ -67,6 +69,7 @@ def migrate_schema():
         ('interview_types', "ALTER TABLE user ADD COLUMN interview_types VARCHAR(200) DEFAULT ''"),
         ('experience_level', "ALTER TABLE user ADD COLUMN experience_level VARCHAR(40) DEFAULT ''"),
         ('availability', "ALTER TABLE user ADD COLUMN availability VARCHAR(200) DEFAULT ''"),
+        ('badges', "ALTER TABLE user ADD COLUMN badges VARCHAR(300) DEFAULT ''"),
     ]:
         if col not in cols:
             alters.append(sql)
@@ -100,6 +103,7 @@ def register():
         interview_types=data.get('interview_types', ''),
         experience_level=data.get('experience_level', ''),
         availability=data.get('availability', ''),
+        badges=data.get('badges', ''),
     )
     db.session.add(user)
     db.session.commit()
@@ -150,6 +154,7 @@ def cognito_sync():
             interview_types=data.get('interview_types', ''),
             experience_level=data.get('experience_level', ''),
             availability=data.get('availability', ''),
+            badges=data.get('badges', ''),
         )
         db.session.add(user)
     else:
@@ -172,6 +177,8 @@ def cognito_sync():
             user.experience_level = data['experience_level']
         if 'availability' in data:
             user.availability = data['availability']
+        if 'badges' in data:
+            user.badges = data['badges']
     db.session.commit()
     return jsonify({'user': user.to_dict()})
 
@@ -205,19 +212,22 @@ def seed():
              bio='Senior SWE at Google, 8 yrs exp.', company='Google',
              skills='DSA, System Design', rate=80,
              domain='Backend', interview_types='DSA, System Design',
-             experience_level='Senior', availability='Weekday evenings UTC'),
+             experience_level='Senior', availability='Weekday evenings UTC',
+             badges='FAANG,Top Rated,System Design'),
         User(name='Bob Smith', email='bob@hiresphere.com',
              password=generate_password_hash('password123'), role='interviewer',
              bio='Staff Engineer at Meta.', company='Meta',
              skills='React, Node.js, Frontend', rate=70,
              domain='Frontend', interview_types='DSA, Behavioral',
-             experience_level='Staff', availability='Weekends'),
+             experience_level='Staff', availability='Weekends',
+             badges='React,Behavioral,Highly Rated'),
         User(name='Carol Lee', email='carol@hiresphere.com',
              password=generate_password_hash('password123'), role='interviewer',
              bio='Principal Engineer at Amazon.', company='Amazon',
              skills='System Design, Cloud, AWS', rate=90,
              domain='DevOps', interview_types='System Design, Behavioral',
-             experience_level='Principal', availability='Flexible — book 48h ahead'),
+             experience_level='Principal', availability='Flexible — book 48h ahead',
+             badges='AWS,Principal,Expert'),
         User(name='Demo Candidate', email='candidate@hiresphere.com',
              password=generate_password_hash('password123'), role='candidate',
              bio='CS grad seeking first SWE role.', skills='Python, JavaScript, React'),

@@ -28,6 +28,7 @@ class Booking(db.Model):
     notes               = db.Column(db.Text, default='')
     payment_status      = db.Column(db.String(20), default='unpaid')
     payment_reference   = db.Column(db.String(120), default='')
+    recording_url       = db.Column(db.String(500), default='')
     created_at          = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     def to_dict(self):
@@ -39,7 +40,27 @@ class Booking(db.Model):
             'price': self.price, 'notes': self.notes,
             'payment_status': self.payment_status,
             'payment_reference': self.payment_reference,
+            'recording_url': self.recording_url,
             'created_at': self.created_at.isoformat(),
+        }
+
+
+class InterviewPackage(db.Model):
+    id             = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    interviewer_id = db.Column(db.String(36), nullable=False)
+    title          = db.Column(db.String(120), nullable=False)
+    description    = db.Column(db.Text, default='')
+    session_count  = db.Column(db.Integer, default=3)
+    price          = db.Column(db.Float, default=0.0)
+    active         = db.Column(db.Boolean, default=True)
+    created_at     = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'interviewer_id': self.interviewer_id,
+            'title': self.title, 'description': self.description,
+            'session_count': self.session_count, 'price': self.price,
+            'active': self.active, 'created_at': self.created_at.isoformat(),
         }
 
 
@@ -53,6 +74,8 @@ def migrate_schema():
         alters.append("ALTER TABLE booking ADD COLUMN payment_status VARCHAR(20) DEFAULT 'paid'")
     if 'payment_reference' not in cols:
         alters.append("ALTER TABLE booking ADD COLUMN payment_reference VARCHAR(120) DEFAULT ''")
+    if 'recording_url' not in cols:
+        alters.append("ALTER TABLE booking ADD COLUMN recording_url VARCHAR(500) DEFAULT ''")
     if alters:
         with db.engine.begin() as conn:
             for sql in alters:
@@ -205,6 +228,53 @@ def update_status(booking_id):
     b.status = new_status
     db.session.commit()
     return jsonify(b.to_dict())
+
+
+@app.route('/bookings/<booking_id>/recording', methods=['PATCH'])
+def set_recording(booking_id):
+    user = get_current_user()
+    if not user or user['role'] != 'interviewer':
+        return jsonify({'error': 'Only interviewers can attach recordings'}), 403
+    b = Booking.query.get_or_404(booking_id)
+    if b.interviewer_id != user['sub']:
+        return jsonify({'error': 'Forbidden'}), 403
+    url = (request.get_json() or {}).get('recording_url', '').strip()
+    if not url:
+        return jsonify({'error': 'recording_url required'}), 400
+    b.recording_url = url[:500]
+    db.session.commit()
+    return jsonify(b.to_dict())
+
+
+@app.route('/packages', methods=['GET'])
+def list_packages():
+    iid = request.args.get('interviewer_id')
+    q = InterviewPackage.query.filter_by(active=True)
+    if iid:
+        q = q.filter_by(interviewer_id=iid)
+    return jsonify([p.to_dict() for p in q.order_by(InterviewPackage.created_at.desc()).all()])
+
+
+@app.route('/packages', methods=['POST'])
+def create_package():
+    user = get_current_user()
+    if not user or user['role'] != 'interviewer':
+        return jsonify({'error': 'Only interviewers can create packages'}), 403
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    if not title:
+        return jsonify({'error': 'title required'}), 400
+    pkg = InterviewPackage(
+        interviewer_id=user['sub'],
+        title=title,
+        description=data.get('description', ''),
+        session_count=int(data.get('session_count', 3)),
+        price=float(data.get('price', 0)),
+        active=True,
+    )
+    db.session.add(pkg)
+    db.session.commit()
+    return jsonify(pkg.to_dict()), 201
 
 
 @app.route('/bookings/all', methods=['GET'])

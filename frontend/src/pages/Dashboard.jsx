@@ -14,6 +14,8 @@ export default function Dashboard() {
 
   const interviewerActions = [
     { label: 'View Bookings', desc: 'See candidate requests and manage your schedule', link: '/bookings', color: 'var(--accent)' },
+    { label: 'Review Submissions', desc: 'Annotate coding challenge solutions from candidates', link: '/submissions', color: '#22c55e' },
+    { label: 'Interview Packages', desc: 'Create bundled session packages for candidates', link: '/packages', color: '#a78bfa' },
     { label: 'Messages', desc: 'Reply to candidates', link: '/messages', color: '#38bdf8' },
   ]
 

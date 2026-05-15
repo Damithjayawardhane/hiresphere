@@ -13,6 +13,9 @@ export default function MyBookings() {
   const [cardNumber, setCardNumber] = useState('4242424242424242')
   const [payError, setPayError] = useState('')
   const [paying, setPaying] = useState(false)
+  const [recordingId, setRecordingId] = useState(null)
+  const [recordingUrl, setRecordingUrl] = useState('')
+  const [recordingSaving, setRecordingSaving] = useState(false)
 
   function load() {
     Promise.all([api.get('/bookings'), api.get('/auth/users')])
@@ -37,6 +40,19 @@ export default function MyBookings() {
       const res = await api.patch(`/bookings/${id}/status`, { status })
       setBookings((prev) => prev.map((b) => (b.id === id ? res.data : b)))
     } catch {}
+  }
+
+  async function saveRecording(id) {
+    setRecordingSaving(true)
+    try {
+      const res = await api.patch(`/bookings/${id}/recording`, { recording_url: recordingUrl })
+      setBookings(prev => prev.map(b => (b.id === id ? res.data : b)))
+      setRecordingId(null)
+      setRecordingUrl('')
+    } catch {}
+    finally {
+      setRecordingSaving(false)
+    }
   }
 
   async function payBooking(id) {
@@ -110,6 +126,14 @@ export default function MyBookings() {
                 {b.notes && (
                   <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4, fontStyle: 'italic' }}>&quot;{b.notes}&quot;</div>
                 )}
+                {b.recording_url && (
+                  <div style={{ marginTop: 8, fontSize: 13 }}>
+                    <strong>Recording:</strong>{' '}
+                    <a href={b.recording_url} target="_blank" rel="noopener noreferrer">
+                      View session recording
+                    </a>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flexDirection: 'column', alignItems: 'stretch' }}>
@@ -156,11 +180,43 @@ export default function MyBookings() {
                   </>
                 )}
                 {user.role === 'interviewer' && b.status === 'completed' && (
-                  <Link to={`/feedback/${b.id}/${b.candidate_id}`}>
-                    <button type="button" className="btn btn-outline" style={{ fontSize: 13, padding: '7px 14px' }}>
-                      Give Feedback
-                    </button>
-                  </Link>
+                  <>
+                    <Link to={`/feedback/${b.id}/${b.candidate_id}`}>
+                      <button type="button" className="btn btn-outline" style={{ fontSize: 13, padding: '7px 14px' }}>
+                        Give Feedback
+                      </button>
+                    </Link>
+                    {recordingId === b.id ? (
+                      <div style={{ minWidth: 220 }}>
+                        <input
+                          style={{ marginBottom: 8, width: '100%' }}
+                          value={recordingUrl}
+                          onChange={e => setRecordingUrl(e.target.value)}
+                          placeholder="https://example.com/recording.mp4"
+                        />
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="button" className="btn btn-primary" style={{ fontSize: 13 }} disabled={recordingSaving} onClick={() => saveRecording(b.id)}>
+                            {recordingSaving ? '…' : 'Save'}
+                          </button>
+                          <button type="button" className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => setRecordingId(null)}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ fontSize: 13, padding: '7px 14px' }}
+                        onClick={() => {
+                          setRecordingId(b.id)
+                          setRecordingUrl(b.recording_url || '')
+                        }}
+                      >
+                        {b.recording_url ? 'Update recording' : 'Add recording URL'}
+                      </button>
+                    )}
+                  </>
                 )}
                 {user.role === 'candidate' && b.status === 'confirmed' && (
                   <button type="button" className="btn btn-primary" style={{ fontSize: 13, padding: '7px 14px' }} onClick={() => navigate(`/session/${b.id}`)}>
@@ -213,6 +269,13 @@ export default function MyBookings() {
                         {user.role === 'candidate' ? 'With' : 'Candidate'}: {other?.name || otherId}
                       </div>
                       <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 2 }}>{new Date(b.scheduled_at).toLocaleString()}</div>
+                      {b.recording_url && (
+                        <div style={{ fontSize: 12, marginTop: 6 }}>
+                          <a href={b.recording_url} target="_blank" rel="noopener noreferrer">
+                            Session recording
+                          </a>
+                        </div>
+                      )}
                     </div>
                     {user.role === 'candidate' && b.status === 'completed' && (
                       <span style={{ fontSize: 12, color: 'var(--muted)', maxWidth: 220, textAlign: 'right' }}>

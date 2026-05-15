@@ -1,5 +1,4 @@
 # Build frontend and deploy to AWS Amplify (manual-hosting app created by CloudFormation).
-# Console "Connect repository" is not available for that app type; this workflow is the GitHub integration.
 name: Deploy to Amplify
 
 on:
@@ -15,9 +14,7 @@ env:
   AWS_REGION: us-east-1
   AMPLIFY_APP_ID: d2vg09g8z6y2es
   AMPLIFY_BRANCH: main
-  # Same origin as Amplify (HTTPS); API paths proxied to ALB via amplify-proxy-rules.json
-  VITE_API_URL: https://main.d2vg09g8z6y2es.amplifyapp.com
-  VITE_SOCKET_URL: https://main.d2vg09g8z6y2es.amplifyapp.com
+  ECS_STACK: hiresphere-ecs
   VITE_COGNITO_USER_POOL_ID: us-east-1_ogGrgkt1q
   VITE_COGNITO_CLIENT_ID: 34isv5k5ht4tpabm961gr56v60
   VITE_AWS_REGION: us-east-1
@@ -31,31 +28,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install and build frontend
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-
-      - name: Package dist (forward-slash paths for Amplify)
-        run: |
-          cd frontend/dist
-          zip -r ../../deploy.zip .
-
       - name: Verify GitHub Actions secrets
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-            echo "::error::Missing repository secrets. Add AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY under Settings → Secrets and variables → Actions, then re-run this workflow."
+            echo "::error::Missing AWS secrets in repository settings."
             exit 1
           fi
 
@@ -65,6 +44,42 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve HTTPS API URL (API Gateway)
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name "$ECS_STACK" \
+            --region "$AWS_REGION" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiHttpsUrl'].OutputValue" \
+            --output text)
+          echo "VITE_API_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "VITE_SOCKET_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "Using API: $API_URL"
+          curl -sf "$API_URL/health"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and build frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ env.VITE_API_URL }}
+          VITE_SOCKET_URL: ${{ env.VITE_SOCKET_URL }}
+          VITE_COGNITO_USER_POOL_ID: ${{ env.VITE_COGNITO_USER_POOL_ID }}
+          VITE_COGNITO_CLIENT_ID: ${{ env.VITE_COGNITO_CLIENT_ID }}
+          VITE_AWS_REGION: ${{ env.VITE_AWS_REGION }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package dist (forward-slash paths for Amplify)
+        run: |
+          cd frontend/dist
+          zip -r ../../deploy.zip .
 
       - name: Upload artifact and start Amplify deployment
         run: |

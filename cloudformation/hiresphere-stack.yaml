@@ -155,6 +155,11 @@ Resources:
     Properties:
       RepositoryName: !Sub ${AppName}/interview-service
 
+  ApiGatewayRepo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${AppName}/api-gateway
+
   # ── RDS (SQLite replaced by RDS PostgreSQL in cloud) ──
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -264,6 +269,41 @@ Outputs:
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub ${AppName}-ALBDNS
+
+  LoadBalancerArn:
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub ${AppName}-ALBArn
+
+  VpcId:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AppName}-VpcId
+
+  PublicSubnet1Id:
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${AppName}-PublicSubnet1
+
+  PublicSubnet2Id:
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${AppName}-PublicSubnet2
+
+  ALBSecurityGroupId:
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub ${AppName}-ALBSecurityGroupId
+
+  ECSClusterName:
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${AppName}-ClusterName
+
+  AmplifyAppId:
+    Value: !GetAtt AmplifyApp.AppId
+    Export:
+      Name: !Sub ${AppName}-AmplifyAppId
 
   AmplifyAppURL:
     Value: !Sub https://main.${AmplifyApp.DefaultDomain}

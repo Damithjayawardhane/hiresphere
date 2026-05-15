@@ -12,6 +12,7 @@ import FeedbackForm from './pages/FeedbackForm'
 import ConfirmSignUp from './pages/ConfirmSignUp'
 import Submissions from './pages/Submissions'
 import Messages from './pages/Messages'
+import Packages from './pages/Packages'
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/session/:bookingId" element={<PrivateRoute><LiveSession /></PrivateRoute>} />
         <Route path="/feedback/:bookingId/:candidateId" element={<PrivateRoute><FeedbackForm /></PrivateRoute>} />
         <Route path="/submissions" element={<PrivateRoute><Submissions /></PrivateRoute>} />
+        <Route path="/packages" element={<PrivateRoute><Packages /></PrivateRoute>} />
         <Route path="/messages" element={<PrivateRoute><Messages /></PrivateRoute>} />
       </Routes>
     </>

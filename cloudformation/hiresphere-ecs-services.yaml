@@ -1,0 +1,345 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  HireSphere ECS Fargate API behind ALB + CloudFront HTTPS (for Amplify mixed-content).
+  Push images first: scripts/push-ecr.ps1 then scripts/deploy-ecs.ps1
+
+Parameters:
+  AppName:
+    Type: String
+    Default: hiresphere
+  ImageTag:
+    Type: String
+    Default: latest
+  AwsAccountId:
+    Type: String
+    Description: AWS account ID for ECR image URIs
+  AwsRegion:
+    Type: String
+    Default: us-east-1
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet::Id
+  LoadBalancerArn:
+    Type: String
+    Description: Application Load Balancer ARN from hiresphere-stack
+  LoadBalancerDnsName:
+    Type: String
+    Description: ALB DNS name (CloudFront origin)
+  ALBSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  ECSClusterName:
+    Type: String
+    Default: hiresphere-cluster
+  CognitoUserPoolId:
+    Type: String
+    Default: ''
+  CognitoAppClientId:
+    Type: String
+    Default: ''
+  AppSecretKey:
+    Type: String
+    NoEcho: true
+    Default: hiresphere-prod-secret-change-me
+    Description: Flask SECRET_KEY for all services
+  AcmCertificateArn:
+    Type: String
+    Default: ''
+    Description: Optional ACM cert ARN for direct HTTPS on ALB (custom domain)
+  UseCloudFront:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Set true only if your AWS account can create CloudFront distributions
+
+Conditions:
+  HasTlsCert: !Not [!Equals [!Ref AcmCertificateArn, '']]
+  EnableCloudFront: !Equals [!Ref UseCloudFront, 'true']
+
+Resources:
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${AppName}
+      RetentionInDays: 7
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HireSphere ECS Fargate tasks
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroupId
+
+  GatewayTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${AppName}-gw-tg
+      Port: 80
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VpcId
+      HealthCheckPath: /health
+      Matcher:
+        HttpCode: 200
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  # HTTP listener — CloudFront origin + health checks
+  ALBHTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GatewayTargetGroup
+      LoadBalancerArn: !Ref LoadBalancerArn
+      Port: 80
+      Protocol: HTTP
+
+  ALBHTTPSListener:
+    Condition: HasTlsCert
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GatewayTargetGroup
+      LoadBalancerArn: !Ref LoadBalancerArn
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref AcmCertificateArn
+
+  HireSphereTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AppName}-api
+      Cpu: '1024'
+      Memory: '2048'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: auth-service
+          Image: !Sub ${AwsAccountId}.dkr.ecr.${AwsRegion}.amazonaws.com/${AppName}/auth-service:${ImageTag}
+          Essential: true
+          PortMappings:
+            - ContainerPort: 5001
+          Environment:
+            - Name: SECRET_KEY
+              Value: !Ref AppSecretKey
+            - Name: DATABASE_URL
+              Value: sqlite:////tmp/auth.db
+            - Name: FLASK_DEBUG
+              Value: '0'
+            - Name: COGNITO_USER_POOL_ID
+              Value: !Ref CognitoUserPoolId
+            - Name: COGNITO_APP_CLIENT_ID
+              Value: !Ref CognitoAppClientId
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AwsRegion
+              awslogs-stream-prefix: auth
+        - Name: booking-service
+          Image: !Sub ${AwsAccountId}.dkr.ecr.${AwsRegion}.amazonaws.com/${AppName}/booking-service:${ImageTag}
+          Essential: true
+          PortMappings:
+            - ContainerPort: 5002
+          Environment:
+            - Name: SECRET_KEY
+              Value: !Ref AppSecretKey
+            - Name: DATABASE_URL
+              Value: sqlite:////tmp/booking.db
+            - Name: AUTH_SERVICE_URL
+              Value: http://127.0.0.1:5001
+            - Name: FLASK_DEBUG
+              Value: '0'
+            - Name: COGNITO_USER_POOL_ID
+              Value: !Ref CognitoUserPoolId
+            - Name: COGNITO_APP_CLIENT_ID
+              Value: !Ref CognitoAppClientId
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AwsRegion
+              awslogs-stream-prefix: booking
+        - Name: interview-service
+          Image: !Sub ${AwsAccountId}.dkr.ecr.${AwsRegion}.amazonaws.com/${AppName}/interview-service:${ImageTag}
+          Essential: true
+          PortMappings:
+            - ContainerPort: 5003
+          Environment:
+            - Name: SECRET_KEY
+              Value: !Ref AppSecretKey
+            - Name: DATABASE_URL
+              Value: sqlite:////tmp/interview.db
+            - Name: UPLOAD_DIR
+              Value: /tmp/uploads
+            - Name: FLASK_DEBUG
+              Value: '0'
+            - Name: COGNITO_USER_POOL_ID
+              Value: !Ref CognitoUserPoolId
+            - Name: COGNITO_APP_CLIENT_ID
+              Value: !Ref CognitoAppClientId
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AwsRegion
+              awslogs-stream-prefix: interview
+        - Name: api-gateway
+          Image: !Sub ${AwsAccountId}.dkr.ecr.${AwsRegion}.amazonaws.com/${AppName}/api-gateway:${ImageTag}
+          Essential: true
+          PortMappings:
+            - ContainerPort: 80
+          DependsOn:
+            - ContainerName: auth-service
+              Condition: START
+            - ContainerName: booking-service
+              Condition: START
+            - ContainerName: interview-service
+              Condition: START
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AwsRegion
+              awslogs-stream-prefix: gateway
+
+  HireSphereService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBHTTPListener
+    Properties:
+      ServiceName: !Sub ${AppName}-api
+      Cluster: !Ref ECSClusterName
+      TaskDefinition: !Ref HireSphereTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 120
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+          SecurityGroups: [!Ref ECSSecurityGroup]
+      LoadBalancers:
+        - ContainerName: api-gateway
+          ContainerPort: 80
+          TargetGroupArn: !Ref GatewayTargetGroup
+
+  # Optional HTTPS CDN (many student accounts need AWS Support verification first)
+  ApiCloudFrontDistribution:
+    Condition: EnableCloudFront
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub ${AppName} API HTTPS front for ALB
+        HttpVersion: http2and3
+        Origins:
+          - Id: alb-origin
+            DomainName: !Ref LoadBalancerDnsName
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+              HTTPPort: 80
+              OriginSSLProtocols: [TLSv1.2]
+        DefaultCacheBehavior:
+          TargetOriginId: alb-origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        PriceClass: PriceClass_100
+
+  # HTTPS API for Amplify (custom rules cannot target HTTP ALB)
+  PublicHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${AppName}-https-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowCredentials: false
+        AllowHeaders:
+          - authorization
+          - content-type
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        AllowOrigins:
+          - '*'
+        MaxAge: 86400
+
+  AlbProxyIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PublicHttpApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      IntegrationUri: !Sub http://${LoadBalancerDnsName}/{proxy}
+      PayloadFormatVersion: '1.0'
+
+  AlbProxyRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PublicHttpApi
+      RouteKey: ANY /{proxy+}
+      Target: !Sub integrations/${AlbProxyIntegration}
+
+  HttpApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref PublicHttpApi
+      StageName: $default
+      AutoDeploy: true
+
+Outputs:
+  ApiHttpsUrl:
+    Description: Set VITE_API_URL and VITE_SOCKET_URL to this HTTPS endpoint
+    Value: !If
+      - EnableCloudFront
+      - !Sub https://${ApiCloudFrontDistribution.DomainName}
+      - !Sub https://${PublicHttpApi}.execute-api.${AwsRegion}.amazonaws.com
+  ApiGatewayId:
+    Value: !Ref PublicHttpApi
+  ApiCloudFrontDomain:
+    Condition: EnableCloudFront
+    Value: !GetAtt ApiCloudFrontDistribution.DomainName
+  AlbHttpUrl:
+    Value: !Sub http://${LoadBalancerDnsName}
+  ServiceName:
+    Value: !GetAtt HireSphereService.Name
+  TargetGroupArn:
+    Value: !Ref GatewayTargetGroup

@@ -111,6 +111,20 @@ Then open **http://localhost:3000**
 - **Live session**: Collaborative code + chat over **Socket.IO**, plus optional **WebRTC** video (STUN + in-room signaling).
 - **Fault tolerance**: Booking service `/health` reports auth-service reachability using **retries (Tenacity)** and a **circuit breaker** when the auth dependency is down.
 - **Feedback System**: Interviewers submit scored reports after sessions
+- **Ratings & badges**: Average scores from feedback; profile badges on interviewer cards
+- **Submission annotations**: Interviewers annotate candidate coding challenge uploads
+- **Interview packages**: Interviewers publish bundled session packages
+- **Session recordings**: Interviewers attach recording URLs after completed sessions
+- **Interview history**: Past sessions section on the bookings page
+
+### Viva demo (recommended order)
+
+1. **AWS Console** — CloudFormation stack `hiresphere`, Cognito user pool, RDS, ALB, Amplify app.
+2. **Live URL** — `https://main.d2vg09g8z6y2es.amplifyapp.com` — Cognito login, UI flows (demo interviewer search if ALB API not wired).
+3. **Local full stack** — `docker compose up -d` then `cd frontend && npm run dev` with `.env.local` — real search, booking, payment, WebRTC, feedback, annotations.
+4. **Kubernetes** — `.\scripts\deploy-k8s.ps1` then `kubectl get pods -n hiresphere` — gateway on NodePort **30080**.
+
+See **`docs/REPORT.md`** for the written assignment report (architecture, trade-offs, deployment).
 
 ---
 
@@ -126,7 +140,20 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM
 ```
 
-This provisions: Cognito, ECS cluster, ECR repositories, RDS PostgreSQL, internet-facing ALB, and an Amplify app. You still attach ECS services or use Kubernetes (below) to run the API containers.
+This provisions: Cognito, ECS cluster, ECR repositories, RDS PostgreSQL, internet-facing ALB, and an Amplify app.
+
+**ECS + HTTPS API (fixes Amplify mixed-content):**
+
+```powershell
+# One command: build/push images, deploy ECS, create CloudFront HTTPS URL, update Amplify
+.\scripts\deploy-ecs.ps1
+```
+
+Or from `start.bat` → option **6**.
+
+- **CloudFront** provides `https://xxxxx.cloudfront.net` → ALB (HTTP) → ECS (nginx + 3 services).
+- Script sets Amplify `VITE_API_URL` / `VITE_SOCKET_URL` to the CloudFront URL and triggers a rebuild.
+- Optional custom domain on ALB: pass `-AcmCertificateArn arn:aws:acm:...` (ACM cert in **us-east-1**).
 
 ### AWS Amplify + Cognito (frontend)
 

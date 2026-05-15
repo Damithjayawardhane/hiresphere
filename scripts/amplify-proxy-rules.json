@@ -1,0 +1,42 @@
+[
+  {
+    "source": "/auth/<*>",
+    "target": "http://ALB_DNS_PLACEHOLDER/auth/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/bookings<*>",
+    "target": "http://ALB_DNS_PLACEHOLDER/bookings<*>",
+    "status": "200"
+  },
+  {
+    "source": "/packages<*>",
+    "target": "http://ALB_DNS_PLACEHOLDER/packages<*>",
+    "status": "200"
+  },
+  {
+    "source": "/feedback<*>",
+    "target": "http://ALB_DNS_PLACEHOLDER/feedback<*>",
+    "status": "200"
+  },
+  {
+    "source": "/submissions<*>",
+    "target": "http://ALB_DNS_PLACEHOLDER/submissions<*>",
+    "status": "200"
+  },
+  {
+    "source": "/messages<*>",
+    "target": "http://ALB_DNS_PLACEHOLDER/messages<*>",
+    "status": "200"
+  },
+  {
+    "source": "/ratings/<*>",
+    "target": "http://ALB_DNS_PLACEHOLDER/ratings/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/health",
+    "target": "http://ALB_DNS_PLACEHOLDER/health",
+    "status": "200"
+  }
+]

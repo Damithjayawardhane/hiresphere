@@ -5,6 +5,33 @@ import { fetchInterviewers } from '../api'
 const DOMAINS = ['', 'Backend', 'Frontend', 'DevOps', 'AI/ML', 'Mobile']
 const LEVELS = ['', 'Senior', 'Staff', 'Principal']
 
+function Stars({ avg }) {
+  if (avg == null) return null
+  const full = Math.round(avg)
+  return (
+    <span style={{ color: '#fbbf24', fontSize: 13, letterSpacing: 1 }} title={`${avg} / 5`}>
+      {'★'.repeat(full)}
+      {'☆'.repeat(5 - full)}
+      <span style={{ color: 'var(--muted)', marginLeft: 6, letterSpacing: 0 }}>{avg}</span>
+    </span>
+  )
+}
+
+function BadgeList({ badges }) {
+  if (!badges) return null
+  const list = badges.split(',').map(s => s.trim()).filter(Boolean)
+  if (!list.length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {list.map(b => (
+        <span key={b} style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--success)', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
+          {b}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export default function Interviewers() {
   const [interviewers, setInterviewers] = useState([])
   const [usingDemo, setUsingDemo] = useState(false)
@@ -121,6 +148,14 @@ export default function Interviewers() {
               <div>
                 <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: 17 }}>{iv.name}</div>
                 {iv.company && <div style={{ color: 'var(--accent)', fontSize: 13, marginTop: 2 }}>{iv.company}</div>}
+                {(iv.rating_avg != null || iv.rating_count > 0) && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Stars avg={iv.rating_avg} />
+                    {iv.rating_count > 0 && (
+                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>({iv.rating_count} reviews)</span>
+                    )}
+                  </div>
+                )}
               </div>
               {iv.rate != null && (
                 <div style={{ color: 'var(--success)', fontWeight: 600, fontSize: 15 }}>
@@ -134,6 +169,7 @@ export default function Interviewers() {
               {iv.domain && <span className="badge badge-interviewer">{iv.domain}</span>}
               {iv.experience_level && <span style={{ color: 'var(--muted)' }}>{iv.experience_level}</span>}
             </div>
+            <BadgeList badges={iv.badges} />
 
             {iv.availability && (
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>
