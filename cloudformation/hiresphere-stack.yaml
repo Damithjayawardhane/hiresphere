@@ -87,7 +87,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: HireSphere RDS — PostgreSQL from VPC CIDR only
+      GroupDescription: HireSphere RDS PostgreSQL from VPC CIDR only
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -137,7 +137,6 @@ Resources:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: !Sub ${AppName}-cluster
-      CapacityProviders: [FARGATE]
 
   # ── ECR Repositories ──────────────────────────────────
   AuthServiceRepo:
