@@ -7,12 +7,15 @@ import {
   fetchAuthSession,
   confirmSignUp,
   getCurrentUser,
+  fetchUserAttributes,
 } from 'aws-amplify/auth'
 import { configureAmplify, isCognitoConfigured } from '../amplify-config'
 
 const AuthContext = createContext(null)
 
-const API = import.meta.env.VITE_API_URL || ''
+const API =
+  import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
+  (typeof window !== 'undefined' ? window.location.origin : '')
 
 function authHeaderFromSession(session) {
   const tok = session?.tokens?.idToken
@@ -21,11 +24,35 @@ function authHeaderFromSession(session) {
   return tok.toString?.() ?? String(tok)
 }
 
+async function userFromCognitoAttributes() {
+  const attrs = await fetchUserAttributes()
+  return {
+    id: attrs.sub,
+    sub: attrs.sub,
+    email: attrs.email,
+    name: attrs.name || attrs.email?.split('@')[0] || 'User',
+    role: attrs['custom:role'] || 'candidate',
+  }
+}
+
+function canCallBackendApi() {
+  if (!API) return false
+  if (typeof window === 'undefined') return true
+  // Browsers block HTTPS pages from calling HTTP APIs (mixed content).
+  if (window.location.protocol === 'https:' && API.startsWith('http://')) return false
+  return true
+}
+
 async function syncCognitoProfile(idToken, body = {}) {
-  const res = await axios.post(`${API}/auth/cognito-sync`, body, {
-    headers: { Authorization: `Bearer ${idToken}` },
-  })
-  return res.data.user
+  if (!canCallBackendApi()) return userFromCognitoAttributes()
+  try {
+    const res = await axios.post(`${API}/auth/cognito-sync`, body, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    })
+    return res.data.user
+  } catch {
+    return userFromCognitoAttributes()
+  }
 }
 
 async function clearCognitoSession() {

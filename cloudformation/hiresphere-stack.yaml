@@ -231,9 +231,9 @@ Resources:
         - Name: AMPLIFY_MONOREPO_APP_ROOT
           Value: frontend
         - Name: VITE_API_URL
-          Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+          Value: !Sub https://main.${AmplifyApp.DefaultDomain}
         - Name: VITE_SOCKET_URL
-          Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+          Value: !Sub https://main.${AmplifyApp.DefaultDomain}
         - Name: VITE_COGNITO_USER_POOL_ID
           Value: !Ref CognitoUserPool
         - Name: VITE_COGNITO_CLIENT_ID
