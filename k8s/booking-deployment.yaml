@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: booking-service
+  namespace: hiresphere
+  labels:
+    app: booking-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: booking-service
+  template:
+    metadata:
+      labels:
+        app: booking-service
+    spec:
+      containers:
+        - name: booking-service
+          image: hiresphere/booking-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5002
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hiresphere-secrets
+                  key: SECRET_KEY
+            - name: DATABASE_URL
+              value: "sqlite:////data/booking.db"
+            - name: AUTH_SERVICE_URL
+              value: "http://auth-service:5001"
+            - name: COGNITO_USER_POOL_ID
+              value: ""
+            - name: COGNITO_APP_CLIENT_ID
+              value: ""
+            - name: AWS_REGION
+              value: "us-east-1"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5002
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: data
+          emptyDir: {}

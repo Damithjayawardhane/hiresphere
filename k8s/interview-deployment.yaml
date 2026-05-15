@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: interview-service
+  namespace: hiresphere
+  labels:
+    app: interview-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: interview-service
+  template:
+    metadata:
+      labels:
+        app: interview-service
+    spec:
+      containers:
+        - name: interview-service
+          image: hiresphere/interview-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5003
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hiresphere-secrets
+                  key: SECRET_KEY
+            - name: DATABASE_URL
+              value: "sqlite:////data/interview.db"
+            - name: COGNITO_USER_POOL_ID
+              value: ""
+            - name: COGNITO_APP_CLIENT_ID
+              value: ""
+            - name: AWS_REGION
+              value: "us-east-1"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5003
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5003
+            initialDelaySeconds: 8
+            periodSeconds: 10
+      volumes:
+        - name: data
+          emptyDir: {}
