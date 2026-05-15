@@ -124,7 +124,14 @@ Then open **http://localhost:3000**
 3. **Local full stack** — `docker compose up -d` then `cd frontend && npm run dev` with `.env.local` — real search, booking, payment, WebRTC, feedback, annotations.
 4. **Kubernetes** — `.\scripts\deploy-k8s.ps1` then `kubectl get pods -n hiresphere` — gateway on NodePort **30080**.
 
-See **`docs/REPORT.md`** for the written assignment report (architecture, trade-offs, deployment).
+See **`docs/REPORT.md`** (architecture diagrams + CFN) and **`docs/VIVA-CHECKLIST.md`** for submission and viva.
+
+**Full cloud deploy (RDS + ECS + HTTPS API):**
+
+```powershell
+.\scripts\push-ecr.ps1
+.\scripts\deploy-ecs.ps1 -DbPassword YOUR_RDS_PASSWORD
+```
 
 ---
 

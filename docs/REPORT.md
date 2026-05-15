@@ -1,178 +1,224 @@
 # HireSphere — SE6020 Cloud Computing Assignment Report
 
-**Student project:** HireSphere — microservices platform for mock technical interviews  
+**Student:** Damith Jayawardhane  
 **Repository:** https://github.com/Damithjayawardhane/hiresphere  
-**AWS region:** us-east-1 · **Stack:** hiresphere  
-**Live frontend:** https://main.d2vg09g8z6y2es.amplifyapp.com
+**AWS region:** us-east-1 · **Stacks:** `hiresphere`, `hiresphere-ecs`  
+**Live UI:** https://main.d2vg09g8z6y2es.amplifyapp.com  
+**HTTPS API:** CloudFormation output `ApiHttpsUrl` on stack `hiresphere-ecs`
 
 ---
 
 ## 1. Introduction
 
-HireSphere connects **candidates** with **interviewers** for paid mock interviews. The system implements the assignment requirements using a **microservices architecture**, containerisation (Docker), orchestration manifests (Kubernetes), infrastructure as code (CloudFormation), managed authentication (Amazon Cognito), static hosting (AWS Amplify), and CI/CD (GitHub Actions).
+HireSphere is a **cloud-native mock interview platform** with **Candidate** and **Interviewer** roles. The system uses **Python Flask microservices**, a **React** SPA on **AWS Amplify**, **Amazon Cognito** authentication, **Docker** containerisation, **Kubernetes** manifests, **AWS CloudFormation** infrastructure, **Amazon RDS PostgreSQL**, and **GitHub Actions** CI/CD.
 
 ---
 
-## 2. System architecture
+## 2. Architecture diagrams
 
-### 2.1 Logical view
+### 2.1 Logical architecture (microservices)
 
-| Service | Responsibility | Port (local) |
-|---------|----------------|--------------|
-| **auth-service** | Users, roles, JWT/Cognito verification, profile sync | 5001 |
-| **booking-service** | Sessions, payments (simulated), packages, recordings | 5002 |
-| **interview-service** | Feedback, submissions, messages, ratings, WebSocket/WebRTC signaling | 5003 |
-| **API gateway (nginx)** | Single entry point, path-based routing, CORS | 8080 |
-| **React frontend** | SPA (Vite), Amplify-hosted in cloud | 3000 |
+```mermaid
+flowchart TB
+  subgraph clients [Clients]
+    Browser[Web Browser]
+  end
+  subgraph frontend [AWS Amplify HTTPS]
+    React[React SPA]
+  end
+  subgraph edge [Edge HTTPS]
+    APIGW[API Gateway HTTP API]
+  end
+  subgraph gateway [API Gateway Layer]
+    NGX[Nginx :80]
+  end
+  subgraph services [Microservices ECS Fargate]
+    AUTH[auth-service :5001]
+    BOOK[booking-service :5002]
+    INT[interview-service :5003]
+  end
+  subgraph data [Data]
+    RDS[(Amazon RDS PostgreSQL)]
+    COG[Amazon Cognito]
+  end
+  Browser --> React
+  React --> COG
+  React -->|HTTPS API calls| APIGW
+  APIGW -->|HTTP| NGX
+  NGX --> AUTH
+  NGX --> BOOK
+  NGX --> INT
+  AUTH --> RDS
+  BOOK --> RDS
+  INT --> RDS
+  BOOK -.->|health check| AUTH
+```
 
-### 2.2 AWS mapping
+### 2.2 AWS deployment architecture
 
-| Local | AWS |
-|-------|-----|
-| docker-compose | ECS Fargate multi-container task (see `cloudformation/hiresphere-ecs-services.yaml`) |
-| nginx gateway | Application Load Balancer → gateway container |
-| SQLite per service | Amazon RDS PostgreSQL (provisioned; services use SQLite locally for dev simplicity) |
-| Cognito env on services | Amazon Cognito User Pool + app client |
-| React build | AWS Amplify + GitHub Actions deploy workflow |
-| k8s manifests | Alternative orchestration demo (Minikube / EKS-compatible) |
+```mermaid
+flowchart LR
+  subgraph internet [Internet]
+    User[User]
+  end
+  subgraph aws [AWS us-east-1]
+    AMP[Amplify Hosting]
+    COGNITO[Cognito User Pool]
+    APIGW2[API Gateway v2 HTTPS]
+    ALB[Application Load Balancer]
+    ECS[ECS Fargate Task]
+    ECR[ECR Images]
+    RDS[(RDS PostgreSQL)]
+    CFN[CloudFormation]
+  end
+  User --> AMP
+  User --> COGNITO
+  AMP --> APIGW2
+  APIGW2 --> ALB
+  ALB --> ECS
+  ECR --> ECS
+  ECS --> RDS
+  CFN -.->|provisions| AMP
+  CFN -.-> COGNITO
+  CFN -.-> ALB
+  CFN -.-> RDS
+  CFN -.-> ECS
+```
 
-### 2.3 Request flow (example: book session)
+### 2.3 Kubernetes (local / EKS-style demo)
 
-1. User signs in via **Cognito** (Amplify Auth) or local JWT.
-2. Frontend calls `POST /bookings` through the gateway.
-3. Gateway forwards to **booking-service**; booking-service validates token via **Cognito JWT** (or calls auth-service locally).
-4. Candidate completes **simulated payment** (`POST /bookings/:id/pay`).
-5. Interviewer confirms → live session via **Socket.IO** + optional **WebRTC**.
-6. Interviewer submits **feedback** → aggregated into **ratings** for search cards.
-
----
-
-## 3. Microservices design
-
-### 3.1 Auth service
-
-- REST API for users and `POST /auth/cognito-sync` to mirror Cognito attributes (`custom:role`, skills, rate, badges).
-- Supports **USER_PASSWORD_AUTH** and Cognito JWT verification in cloud-aligned deployments.
-
-### 3.2 Booking service
-
-- CRUD for bookings with statuses: `awaiting_payment` → `pending` → `confirmed` → `completed`.
-- **Payment simulation** (test card numbers) before interviewer visibility.
-- **Interview packages** (`GET/POST /packages`) for bundled sessions.
-- **Recording URLs** (`PATCH /bookings/:id/recording`) after sessions.
-- **Resilience:** Tenacity retries + circuit breaker on auth-service health checks.
-
-### 3.3 Interview service
-
-- **Feedback reports** with scored dimensions → drives `/ratings/interviewers`.
-- **Challenge submissions** (GitHub URL and/or file upload) with **interviewer annotations**.
-- **Messaging** between candidates and interviewers.
-- **Socket.IO** rooms for collaborative editor + WebRTC signaling.
-
-### 3.4 API gateway
-
-- Centralises routing and CORS; same `nginx.conf` for Docker Compose, K8s ConfigMap, and ECS gateway image (`nginx/Dockerfile` + `nginx-ecs.conf`).
-
----
-
-## 4. Frontend
-
-- **React + Vite** SPA with role-based routes (candidate vs interviewer).
-- **AWS Amplify Auth** when `VITE_COGNITO_*` is set; otherwise local demo JWT.
-- **Cloud demo fallback:** if Amplify cannot reach the ALB API (HTTPS/mixed content), interviewer search uses embedded demo data so the UI remains demonstrable.
-- **Local full stack:** `VITE_API_URL=http://localhost:8080` via `frontend/.env.local` and `docker compose`.
-
-Key pages: interviewer search (filters + ratings), booking + calendar (`datetime-local`), payments, live session, feedback, submissions (annotate), packages, messages, booking history + recordings.
-
----
-
-## 5. Infrastructure as code
-
-### 5.1 `cloudformation/hiresphere-stack.yaml`
-
-Provisions: VPC, public subnets, **Cognito** (SRP + password auth, `custom:role`), **ECS cluster**, **ECR** repos, **RDS PostgreSQL**, internet-facing **ALB**, **Amplify** app with build spec.
-
-### 5.2 `cloudformation/hiresphere-ecs-services.yaml`
-
-Optional second stack: **Fargate task** running auth + booking + interview + nginx gateway, registered to the ALB target group. Deploy after `scripts/push-ecr.ps1`.
-
-### 5.3 Kubernetes (`k8s/`)
-
-Namespace `hiresphere`, three deployments, nginx gateway **NodePort 30080**, ConfigMap aligned with gateway routes (`/ratings/`, `/packages`). Deploy: `scripts/deploy-k8s.ps1`.
-
----
-
-## 6. Authentication (Cognito)
-
-- **User Pool:** email sign-in, custom attribute `role` (candidate | interviewer).
-- **App client:** `USER_SRP_AUTH`, `USER_PASSWORD_AUTH`, refresh tokens.
-- Frontend obtains ID token → `Authorization: Bearer` on API calls; services validate JWT against pool JWKS.
-- Profile fields synced post-login via `/auth/cognito-sync`.
-
----
-
-## 7. CI/CD and repository
-
-- **GitHub:** https://github.com/Damithjayawardhane/hiresphere
-- **`.github/workflows/ci.yml`:** build frontend and Docker images on push.
-- **`.github/workflows/amplify-deploy.yml`:** deploy `frontend/dist` to existing Amplify app (account limit: one app — use CFN-created `hiresphere-frontend`).
-
----
-
-## 8. Assignment feature checklist
-
-| Requirement | Implementation |
-|-------------|----------------|
-| Microservices | 3 Flask services + gateway |
-| Docker | Dockerfiles + docker-compose |
-| Kubernetes | `k8s/` manifests + deploy script |
-| CloudFormation | Baseline + ECS services template |
-| Cognito auth | User pool + Amplify Auth |
-| Amplify hosting | Live URL + GitHub Actions |
-| Interviewer search | Domain, type, experience, text |
-| Book + pay | Booking flow + simulated payment |
-| Calendar slot | `datetime-local` on book form |
-| Live interview | Socket.IO + WebRTC |
-| Feedback / ratings | Feedback API + star averages + badges |
-| Submissions | Upload + GitHub + annotations |
-| Packages | CRUD for interviewers |
-| Recordings | URL on completed bookings |
-| History | Past bookings section |
-| GitHub | Public repo + Actions |
-
----
-
-## 9. Trade-offs and limitations
-
-1. **RDS vs SQLite:** RDS is provisioned in AWS; microservices still use **SQLite in containers** for simpler local/K8s/ECS demos without schema migration tooling. Production would use one PostgreSQL schema per service or shared RDS with separate databases.
-2. **Cloud API on Amplify:** Browser **mixed content** blocks HTTP ALB calls from HTTPS Amplify; frontend uses same-origin demo data unless ALB is exposed via HTTPS or a reverse proxy. **Local Docker** demonstrates full API integration.
-3. **Payment:** Simulated card processor for assignment scope, not Stripe production.
-4. **ECS:** Multi-container task mirrors docker-compose; production might use separate services with Service Connect.
-
----
-
-## 10. How to reproduce
-
-```bash
-# Local
-docker compose up --build -d
-cd frontend && cp env.local.example .env.local && npm ci && npm run dev
-
-# Kubernetes
-.\scripts\deploy-k8s.ps1 -BuildImages
-
-# AWS (after CLI configure)
-aws cloudformation deploy --template-file cloudformation/hiresphere-stack.yaml --stack-name hiresphere --capabilities CAPABILITY_IAM --parameter-overrides DBPassword=***
-.\scripts\push-ecr.ps1
-# Deploy ecs-services with VPC/ALB parameters from stack outputs
+```mermaid
+flowchart TB
+  DEV[Developer kubectl]
+  subgraph k8s [Namespace hiresphere]
+    NP[Service NodePort 30080]
+    GW[nginx api-gateway Pod]
+    A[auth Pod]
+    B[booking Pod]
+    I[interview Pod]
+  end
+  DEV --> NP
+  NP --> GW
+  GW --> A
+  GW --> B
+  GW --> I
 ```
 
 ---
 
-## 11. Conclusion
+## 3. CloudFormation scripts
 
-HireSphere delivers a **complete microservices codebase** with cloud-aligned auth, gateway routing, container orchestration, IaC, and a hosted React UI. **End-to-end cloud API** on the public ALB is supported via the ECS services stack; **local and K8s** environments provide full feature demonstration for viva and marking.
+| Template | Purpose |
+|----------|---------|
+| `cloudformation/hiresphere-stack.yaml` | VPC, subnets, **Cognito**, **RDS PostgreSQL**, **ALB**, **ECR**, **ECS cluster**, **Amplify** app |
+| `cloudformation/hiresphere-ecs-services.yaml` | ECS Fargate (4 containers), **API Gateway HTTPS**, target group, **auto-scaling**, optional CloudFront |
+
+**Deploy (viva):**
+
+```powershell
+aws cloudformation deploy --template-file cloudformation/hiresphere-stack.yaml `
+  --stack-name hiresphere --capabilities CAPABILITY_IAM `
+  --parameter-overrides DBPassword=YourSecurePassword123!
+
+.\scripts\push-ecr.ps1
+.\scripts\deploy-ecs.ps1 -DbPassword YourSecurePassword123!
+```
 
 ---
 
-*Submit this document to Moodle as the written component (Task 1) alongside the repository URL and demo video/slides if required.*
+## 4. Microservices (Python)
+
+| Service | Port | Responsibility |
+|---------|------|----------------|
+| **auth-service** | 5001 | Users, roles, Cognito JWT, `/auth/cognito-sync`, profile badges |
+| **booking-service** | 5002 | Bookings, payments (simulated), packages, recordings; **circuit breaker** + retries to auth |
+| **interview-service** | 5003 | Feedback, ratings, submissions + annotations, messages, Socket.IO / WebRTC signaling |
+
+All services use **SQLAlchemy** with `DATABASE_URL` → **SQLite** (local/K8s) or **PostgreSQL** (ECS + RDS).
+
+---
+
+## 5. Frontend (React + Amplify + Cognito)
+
+- **Login / register / confirm** via Amplify Auth (`USER_PASSWORD_AUTH`).
+- **Candidate:** search interviewers, book, pay, submissions, history, messages, join live session.
+- **Interviewer:** bookings, feedback, annotate submissions, packages, recordings.
+- **Build:** GitHub Actions resolves `VITE_API_URL` from stack `hiresphere-ecs` output `ApiHttpsUrl`.
+
+---
+
+## 6. Containerisation and Kubernetes
+
+- **Docker:** `Dockerfile` per service; `docker-compose.yml` mirrors cloud topology.
+- **K8s:** `k8s/*.yaml` — deployments, services, nginx ConfigMap, NodePort **30080**.
+- **Script:** `scripts/deploy-k8s.ps1`
+
+---
+
+## 7. Database (Amazon RDS)
+
+- **Engine:** PostgreSQL 15 on `db.t3.micro` (cost-efficient).
+- **Database name:** `hiresphere` (shared; each service runs `db.create_all()` for its tables).
+- **Security:** RDS security group allows VPC CIDR; not public.
+- **ECS:** `deploy-ecs.ps1 -DbPassword ...` sets `DATABASE_URL=postgresql://hiresphere:...@endpoint:5432/hiresphere`.
+
+*DynamoDB was not used; RDS fits relational booking/user/feedback data.*
+
+---
+
+## 8. Cloud design patterns (scalable, secure, fault-tolerant, cost-efficient)
+
+| Pattern | Implementation |
+|---------|----------------|
+| **Scalable** | ECS service auto-scaling (CPU target 70%, min 1 max 3); stateless services |
+| **Secure** | Cognito JWT; HTTPS API Gateway; SGs; secrets via CFN parameters / env |
+| **Fault-tolerant** | ALB health checks; booking → auth circuit breaker (Tenacity); multi-AZ-ready VPC |
+| **Cost-efficient** | `t3.micro` RDS, Fargate 1 task default, Amplify free tier, API GW pay-per-request |
+
+---
+
+## 9. Version control and CI/CD
+
+- **GitHub:** https://github.com/Damithjayawardhane/hiresphere  
+- **CI:** `.github/workflows/ci.yml` — build frontend + Docker images  
+- **Deploy:** `.github/workflows/amplify-deploy.yml` — build with API URL from CFN, upload to Amplify  
+
+---
+
+## 10. Feature checklist (assignment)
+
+| Requirement | Status |
+|-------------|--------|
+| Architecture report + diagrams + CFN | Yes (this document + templates) |
+| Microservices (Python) | Yes (3 services) |
+| React + Amplify + Cognito | Yes |
+| Login, booking, uploads, history | Yes |
+| Docker + Kubernetes | Yes |
+| RDS (or DynamoDB) | Yes (RDS PostgreSQL) |
+| CloudFormation full deploy | Yes |
+| Candidate + Interviewer profiles | Yes |
+| GitHub integration | Yes |
+
+---
+
+## 11. Viva demonstration script (10–15 min)
+
+1. **CloudFormation** — show stacks `hiresphere` + `hiresphere-ecs` (CREATE_COMPLETE).  
+2. **Cognito** — user pool, app client, test user roles.  
+3. **RDS** — instance `hiresphere-db`, endpoint, PostgreSQL.  
+4. **ECS** — cluster, service `hiresphere-api`, running task (4 containers).  
+5. **API** — `curl https://<ApiHttpsUrl>/health` → `{"gateway":"ok"}`.  
+6. **Amplify** — open live URL, login, search/book (cloud).  
+7. **Local** — `start.bat` → option 1: full Docker + WebRTC demo.  
+8. **K8s** — `kubectl get pods -n hiresphere` (optional).  
+9. **GitHub** — Actions workflows green on `main`.
+
+---
+
+## 12. Conclusion
+
+HireSphere implements the full assignment scope: **microservices**, **containers**, **Kubernetes**, **CloudFormation**, **Cognito**, **Amplify**, **RDS**, and **GitHub Actions**, with a clear **HTTPS API** path for the hosted UI and honest documentation of local vs cloud behaviour.
+
+---
+
+*Submit as PDF to Moodle (export this file) with repository link and optional demo video.*

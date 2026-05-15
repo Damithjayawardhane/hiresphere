@@ -177,6 +177,7 @@ Resources:
       EngineVersion: '15'
       MasterUsername: hiresphere
       MasterUserPassword: !Ref DBPassword
+      DBName: hiresphere
       AllocatedStorage: 20
       DBSubnetGroupName: !Ref DBSubnetGroup
       PubliclyAccessible: false
@@ -304,6 +305,16 @@ Outputs:
     Value: !GetAtt AmplifyApp.AppId
     Export:
       Name: !Sub ${AppName}-AmplifyAppId
+
+  RdsEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+    Export:
+      Name: !Sub ${AppName}-RdsEndpoint
+
+  RdsPort:
+    Value: !GetAtt Database.Endpoint.Port
+    Export:
+      Name: !Sub ${AppName}-RdsPort
 
   AmplifyAppURL:
     Value: !Sub https://main.${AmplifyApp.DefaultDomain}

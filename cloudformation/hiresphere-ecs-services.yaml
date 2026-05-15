@@ -53,10 +53,16 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Set true only if your AWS account can create CloudFront distributions
+  DatabaseUrl:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: PostgreSQL URL (RDS). Empty = SQLite in task (local dev only).
 
 Conditions:
   HasTlsCert: !Not [!Equals [!Ref AcmCertificateArn, '']]
   EnableCloudFront: !Equals [!Ref UseCloudFront, 'true']
+  UsePostgres: !Not [!Equals [!Ref DatabaseUrl, '']]
 
 Resources:
   ECSTaskExecutionRole:
@@ -147,7 +153,7 @@ Resources:
             - Name: SECRET_KEY
               Value: !Ref AppSecretKey
             - Name: DATABASE_URL
-              Value: sqlite:////tmp/auth.db
+              Value: !If [UsePostgres, !Ref DatabaseUrl, 'sqlite:////tmp/auth.db']
             - Name: FLASK_DEBUG
               Value: '0'
             - Name: COGNITO_USER_POOL_ID
@@ -171,7 +177,7 @@ Resources:
             - Name: SECRET_KEY
               Value: !Ref AppSecretKey
             - Name: DATABASE_URL
-              Value: sqlite:////tmp/booking.db
+              Value: !If [UsePostgres, !Ref DatabaseUrl, 'sqlite:////tmp/booking.db']
             - Name: AUTH_SERVICE_URL
               Value: http://127.0.0.1:5001
             - Name: FLASK_DEBUG
@@ -197,7 +203,7 @@ Resources:
             - Name: SECRET_KEY
               Value: !Ref AppSecretKey
             - Name: DATABASE_URL
-              Value: sqlite:////tmp/interview.db
+              Value: !If [UsePostgres, !Ref DatabaseUrl, 'sqlite:////tmp/interview.db']
             - Name: UPLOAD_DIR
               Value: /tmp/uploads
             - Name: FLASK_DEBUG
@@ -252,6 +258,29 @@ Resources:
         - ContainerName: api-gateway
           ContainerPort: 80
           TargetGroupArn: !Ref GatewayTargetGroup
+
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      ResourceId: !Sub service/${ECSClusterName}/${AppName}-api
+      MinCapacity: 1
+      MaxCapacity: 3
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+
+  ServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub ${AppName}-cpu-target
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 120
+        ScaleOutCooldown: 60
 
   # Optional HTTPS CDN (many student accounts need AWS Support verification first)
   ApiCloudFrontDistribution:

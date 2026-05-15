@@ -6,3 +6,4 @@ cryptography>=42.0.0
 requests==2.31.*
 tenacity==8.2.*
 werkzeug==3.0.*
+psycopg2-binary==2.9.*

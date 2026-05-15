@@ -15,6 +15,7 @@ param(
     [string]$AmplifyAppId = "d2vg09g8z6y2es",
     [string]$AmplifyBranch = "main",
     [string]$AcmCertificateArn = "",
+    [string]$DbPassword = "",
     [switch]$SkipPush,
     [switch]$SkipAmplifyUpdate,
     [switch]$UseCloudFront
@@ -96,6 +97,23 @@ if (-not $SkipPush) {
     & "$Root\scripts\push-ecr.ps1" -Region $Region -AccountId $AccountId -AppName $AppName
 }
 
+if (-not $DbPassword) { $DbPassword = $env:HIRESPHERE_DB_PASSWORD }
+$databaseUrl = ""
+if ($DbPassword) {
+    $rdsHost = Get-StackOutput "RdsEndpoint"
+    if (-not $rdsHost) {
+        $rdsHost = aws rds describe-db-instances --db-instance-identifier "$AppName-db" --region $Region `
+            --query "DBInstances[0].Endpoint.Address" --output text 2>$null
+    }
+    if ($rdsHost -and $rdsHost -ne "None") {
+        $enc = [uri]::EscapeDataString($DbPassword)
+        $databaseUrl = "postgresql://hiresphere:${enc}@${rdsHost}:5432/hiresphere"
+        Write-Host "RDS PostgreSQL enabled on ECS tasks." -ForegroundColor Green
+    }
+} else {
+    Write-Host "No DB password (set -DbPassword or HIRESPHERE_DB_PASSWORD). ECS uses SQLite." -ForegroundColor Yellow
+}
+
 $overrides = @(
     "AppName=$AppName",
     "AwsAccountId=$AccountId",
@@ -112,6 +130,7 @@ $overrides = @(
 )
 if ($AcmCertificateArn) { $overrides += "AcmCertificateArn=$AcmCertificateArn" }
 $overrides += "UseCloudFront=$($UseCloudFront.ToString().ToLower())"
+if ($databaseUrl) { $overrides += "DatabaseUrl=$databaseUrl" }
 
 $ecsStatus = aws cloudformation describe-stacks --stack-name $EcsStack --region $Region `
     --query "Stacks[0].StackStatus" --output text 2>$null
