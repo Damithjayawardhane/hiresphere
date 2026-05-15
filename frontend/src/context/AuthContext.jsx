@@ -101,7 +101,11 @@ export function AuthProvider({ children }) {
       }
       sessionStorage.setItem('pendingCognitoProfile', JSON.stringify(profile))
       if (isSignUpComplete) {
-        await amplifySignIn({ username: email, password })
+        await amplifySignIn({
+          username: email,
+          password,
+          options: { authFlowType: 'USER_PASSWORD_AUTH' },
+        })
         const session = await fetchAuthSession()
         const idToken = authHeaderFromSession(session)
         if (!idToken) throw new Error('No session after sign-up')
@@ -135,7 +139,11 @@ export function AuthProvider({ children }) {
 
   async function signIn(email, password) {
     if (useCognito) {
-      await amplifySignIn({ username: email, password })
+      await amplifySignIn({
+        username: email,
+        password,
+        options: { authFlowType: 'USER_PASSWORD_AUTH' },
+      })
       const session = await fetchAuthSession()
       const idToken = authHeaderFromSession(session)
       if (!idToken) throw new Error('No ID token')

@@ -1,0 +1,93 @@
+# Build frontend and deploy to AWS Amplify (manual-hosting app created by CloudFormation).
+# Console "Connect repository" is not available for that app type; this workflow is the GitHub integration.
+name: Deploy to Amplify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'amplify.yml'
+      - '.github/workflows/amplify-deploy.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  AMPLIFY_APP_ID: d2vg09g8z6y2es
+  AMPLIFY_BRANCH: main
+  VITE_API_URL: http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com
+  VITE_SOCKET_URL: http://hiresphere-alb-572231780.us-east-1.elb.amazonaws.com
+  VITE_COGNITO_USER_POOL_ID: us-east-1_ogGrgkt1q
+  VITE_COGNITO_CLIENT_ID: 34isv5k5ht4tpabm961gr56v60
+  VITE_AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Package dist (forward-slash paths for Amplify)
+        run: |
+          cd frontend/dist
+          zip -r ../../deploy.zip .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload artifact and start Amplify deployment
+        run: |
+          set -euo pipefail
+          DEPLOY_JSON=$(aws amplify create-deployment \
+            --app-id "$AMPLIFY_APP_ID" \
+            --branch-name "$AMPLIFY_BRANCH" \
+            --region "$AWS_REGION")
+          JOB_ID=$(echo "$DEPLOY_JSON" | jq -r '.jobId')
+          ZIP_URL=$(echo "$DEPLOY_JSON" | jq -r '.zipUploadUrl')
+          echo "Amplify job id: $JOB_ID"
+          curl --fail --silent --show-error -X PUT -T deploy.zip \
+            -H "Content-Type: application/zip" \
+            "$ZIP_URL"
+          aws amplify start-deployment \
+            --app-id "$AMPLIFY_APP_ID" \
+            --branch-name "$AMPLIFY_BRANCH" \
+            --job-id "$JOB_ID" \
+            --region "$AWS_REGION"
+          echo "Waiting for deployment to finish..."
+          for i in $(seq 1 60); do
+            STATUS=$(aws amplify get-job \
+              --app-id "$AMPLIFY_APP_ID" \
+              --branch-name "$AMPLIFY_BRANCH" \
+              --job-id "$JOB_ID" \
+              --region "$AWS_REGION" \
+              --query 'job.summary.status' \
+              --output text)
+            echo "  status=$STATUS (${i}/60)"
+            case "$STATUS" in
+              SUCCEED) echo "Deployed: https://main.d2vg09g8z6y2es.amplifyapp.com"; exit 0 ;;
+              FAILED|CANCELLED) echo "Deployment failed"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "Timed out waiting for Amplify job"
+          exit 1
