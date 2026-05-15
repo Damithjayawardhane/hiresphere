@@ -11,6 +11,8 @@ export default defineConfig({
       '/feedback': 'http://localhost:8080',
       '/submissions': 'http://localhost:8080',
       '/messages': 'http://localhost:8080',
+      '/ratings': 'http://localhost:8080',
+      '/packages': 'http://localhost:8080',
       '/socket.io': { target: 'http://localhost:8080', ws: true },
     },
   }

@@ -36,36 +36,24 @@ export default function Login() {
   }
 
   return (
-    <div style={{ minHeight: 'calc(100vh - 60px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 420 }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1 style={{ fontFamily: 'var(--font-head)', fontSize: 32, fontWeight: 800 }}>Welcome back</h1>
-          <p style={{ color: 'var(--muted)', marginTop: 8 }}>Sign in to your HireSphere account</p>
+    <div className="auth-layout">
+      <div className="auth-panel">
+        <div className="auth-hero">
+          <h1>Welcome back</h1>
+          <p>Sign in to HireSphere</p>
         </div>
 
         {params.get('confirmed') === '1' && (
-          <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 8, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--muted)' }}>
-            Email verified. Sign in with your password to finish setup.
-          </div>
-        )}
-
-        {!useCognito && (
-          <div style={{ background: 'rgba(108,99,255,0.08)', border: '1px solid rgba(108,99,255,0.2)', borderRadius: 8, padding: '12px 16px', marginBottom: 24, fontSize: 13, color: 'var(--muted)' }}>
-            <strong style={{ color: 'var(--accent)' }}>Demo accounts:</strong>
-            <br />
-            Candidate: candidate@hiresphere.com / password123
-            <br />
-            Interviewer: alice@hiresphere.com / password123
-          </div>
+          <div className="alert alert-success">Email verified. Sign in to continue.</div>
         )}
 
         {useCognito && (
-          <div style={{ background: 'rgba(108,99,255,0.06)', border: '1px solid rgba(108,99,255,0.15)', borderRadius: 8, padding: '12px 16px', marginBottom: 24, fontSize: 13, color: 'var(--muted)' }}>
-            Using <strong style={{ color: 'var(--accent)' }}>AWS Cognito</strong> (Amplify). Sign in with the account you created in the deployed user pool.
+          <div className="alert alert-info">
+            Secured with <strong>AWS Cognito</strong>. Use the account from your deployed user pool.
           </div>
         )}
 
-        <div className="card">
+        <div className="card card-glass">
           <form onSubmit={handleSubmit}>
             <div className="form-group">
               <label>Email</label>
@@ -75,11 +63,19 @@ export default function Login() {
                 value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 required
+                autoComplete="email"
               />
             </div>
             <div className="form-group">
               <label>Password</label>
-              <input type="password" placeholder="••••••••" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={form.password}
+                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                required
+                autoComplete="current-password"
+              />
             </div>
             {error && (
               <>
@@ -87,8 +83,8 @@ export default function Login() {
                 {error.includes('already a signed in user') && (
                   <button
                     type="button"
-                    className="btn btn-secondary"
-                    style={{ width: '100%', marginBottom: 8, justifyContent: 'center' }}
+                    className="btn btn-outline"
+                    style={{ width: '100%', marginBottom: 8 }}
                     onClick={() => {
                       signOut()
                       setError('')
@@ -99,14 +95,14 @@ export default function Login() {
                 )}
               </>
             )}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8, justifyContent: 'center' }} disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
         </div>
 
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 14, color: 'var(--muted)' }}>
-          Don&apos;t have an account? <Link to="/register">Register</Link>
+          No account? <Link to="/register">Create one</Link>
         </p>
       </div>
     </div>

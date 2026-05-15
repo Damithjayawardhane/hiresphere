@@ -106,6 +106,7 @@ if ($DbPassword) {
             --query "DBInstances[0].Endpoint.Address" --output text 2>$null
     }
     if ($rdsHost -and $rdsHost -ne "None") {
+        & "$Root\scripts\init-rds-db.ps1" -DbPassword $DbPassword -MainStack $MainStack -EcsStack $EcsStack -Region $Region -AppName $AppName
         $enc = [uri]::EscapeDataString($DbPassword)
         $databaseUrl = "postgresql://hiresphere:${enc}@${rdsHost}:5432/hiresphere"
         Write-Host "RDS PostgreSQL enabled on ECS tasks." -ForegroundColor Green
@@ -147,6 +148,16 @@ aws cloudformation deploy `
     --region $Region `
     --capabilities CAPABILITY_IAM `
     --parameter-overrides @overrides
+if ($LASTEXITCODE -ne 0) {
+    $st = aws cloudformation describe-stacks --stack-name $EcsStack --region $Region `
+        --query "Stacks[0].StackStatus" --output text 2>$null
+    if ($st -eq "UPDATE_IN_PROGRESS") {
+        Write-Host "Stack still updating (ECS rollout can take 15+ min). Check:" -ForegroundColor Yellow
+        Write-Host "  aws cloudformation describe-stacks --stack-name $EcsStack --query Stacks[0].StackStatus" -ForegroundColor Gray
+    } else {
+        throw "CloudFormation deploy failed (stack status: $st)"
+    }
+}
 
 $apiUrl = aws cloudformation describe-stacks --stack-name $EcsStack --region $Region `
     --query "Stacks[0].Outputs[?OutputKey=='ApiHttpsUrl'].OutputValue" --output text

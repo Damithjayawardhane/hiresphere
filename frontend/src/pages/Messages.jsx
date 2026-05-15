@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Loading from '../components/Loading'
+import PageHeader from '../components/PageHeader'
 
 export default function Messages() {
   const { user } = useAuth()
@@ -10,13 +11,14 @@ export default function Messages() {
   const [thread, setThread] = useState([])
   const [body, setBody] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const role = user?.role === 'candidate' ? 'interviewer' : 'candidate'
     api
       .get(`/auth/users?role=${role}`)
-      .then(r => setContacts(r.data))
-      .catch(() => {})
+      .then(r => setContacts(r.data || []))
+      .catch(() => setError('Could not load contacts from database.'))
       .finally(() => setLoading(false))
   }, [user?.role])
 
@@ -25,7 +27,10 @@ export default function Messages() {
       setThread([])
       return
     }
-    api.get(`/messages?with=${encodeURIComponent(withId)}`).then(r => setThread(r.data)).catch(() => setThread([]))
+    api
+      .get(`/messages?with=${encodeURIComponent(withId)}`)
+      .then(r => setThread(r.data || []))
+      .catch(() => setThread([]))
   }, [withId])
 
   async function send(e) {
@@ -36,67 +41,78 @@ export default function Messages() {
     setBody('')
   }
 
-  if (loading) return <div className="page" style={{ color: 'var(--muted)' }}>Loading...</div>
+  if (loading) {
+    return (
+      <div className="page">
+        <Loading label="Loading contacts…" />
+      </div>
+    )
+  }
 
   const peerLabel = user?.role === 'candidate' ? 'Interviewer' : 'Candidate'
+  const activeContact = contacts.find(c => c.id === withId)
 
   return (
     <div className="page">
-      <h1 className="page-title">Messages</h1>
-      <p style={{ color: 'var(--muted)', marginBottom: 20, maxWidth: 640 }}>
-        Direct messages with a {peerLabel.toLowerCase()} you are connected with (assignment: messaging service).
-      </p>
+      <PageHeader
+        title="Messages"
+        subtitle={`Direct messages with ${peerLabel.toLowerCase()}s from your account.`}
+      />
 
-      <div className="form-group" style={{ maxWidth: 400 }}>
-        <label>Conversation with</label>
-        <select value={withId} onChange={e => setWithId(e.target.value)}>
-          <option value="">Select {peerLabel.toLowerCase()}…</option>
-          {contacts.map(c => (
-            <option key={c.id} value={c.id}>
-              {c.name} {c.company ? `(${c.company})` : ''}
-            </option>
-          ))}
-        </select>
-      </div>
+      {error && <div className="alert alert-error">{error}</div>}
 
-      {withId && (
-        <div className="card" style={{ maxWidth: 640, marginTop: 20, minHeight: 200 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-            {thread.length === 0 && <p style={{ color: 'var(--muted)', fontSize: 14 }}>No messages yet. Say hello below.</p>}
-            {thread.map(m => {
-              const mine = m.from_id === user?.id
-              return (
-                <div
-                  key={m.id}
-                  style={{
-                    alignSelf: mine ? 'flex-end' : 'flex-start',
-                    maxWidth: '85%',
-                    background: mine ? 'rgba(108,99,255,0.15)' : 'var(--surface2)',
-                    padding: '8px 12px',
-                    borderRadius: 10,
-                    fontSize: 14,
-                  }}
-                >
-                  {m.body}
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                    {new Date(m.created_at).toLocaleString()}
-                  </div>
-                </div>
-              )
-            })}
+      <div className="messages-layout">
+        <aside className="card">
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>{peerLabel}</label>
+            <select value={withId} onChange={e => setWithId(e.target.value)}>
+              <option value="">Select…</option>
+              {contacts.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c.company ? `· ${c.company}` : ''}
+                </option>
+              ))}
+            </select>
           </div>
-          <form onSubmit={send} style={{ display: 'flex', gap: 8 }}>
-            <input style={{ flex: 1 }} placeholder="Type a message…" value={body} onChange={e => setBody(e.target.value)} />
-            <button type="submit" className="btn btn-primary">
-              Send
-            </button>
-          </form>
-        </div>
-      )}
+          {contacts.length === 0 && (
+            <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 12 }}>No {peerLabel.toLowerCase()}s in database yet.</p>
+          )}
+        </aside>
 
-      <p style={{ marginTop: 24 }}>
-        <Link to="/dashboard">← Dashboard</Link>
-      </p>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 360 }}>
+          {withId ? (
+            <>
+              <p style={{ fontWeight: 600, marginBottom: 12 }}>
+                {activeContact?.name || withId}
+              </p>
+              <div className="message-thread">
+                {thread.length === 0 && (
+                  <p style={{ color: 'var(--muted)', fontSize: 14 }}>No messages yet. Start the conversation.</p>
+                )}
+                {thread.map(m => {
+                  const mine = m.from_id === user?.id
+                  return (
+                    <div key={m.id} className={`msg-bubble ${mine ? 'mine' : 'theirs'}`}>
+                      {m.body}
+                      <div style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>
+                        {new Date(m.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <form onSubmit={send} style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <input style={{ flex: 1 }} placeholder="Type a message…" value={body} onChange={e => setBody(e.target.value)} />
+                <button type="submit" className="btn btn-primary">Send</button>
+              </form>
+            </>
+          ) : (
+            <div className="empty-state" style={{ padding: 32 }}>
+              <p>Select a {peerLabel.toLowerCase()} to view messages</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

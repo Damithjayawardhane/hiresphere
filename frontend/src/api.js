@@ -11,78 +11,6 @@ export const API_BASE = resolveApiBase()
 
 export const api = axios.create({ baseURL: API_BASE })
 
-/** Shown when cloud UI cannot reach the ALB-backed API (demo / viva). */
-export const DEMO_INTERVIEWERS = [
-  {
-    id: 'demo-alice',
-    name: 'Alice Johnson',
-    email: 'alice@hiresphere.com',
-    role: 'interviewer',
-    bio: 'Senior SWE at Google, 8 yrs exp.',
-    company: 'Google',
-    skills: 'DSA, System Design',
-    rate: 80,
-    domain: 'Backend',
-    interview_types: 'DSA, System Design',
-    experience_level: 'Senior',
-    availability: 'Weekday evenings UTC',
-    badges: 'FAANG,Top Rated,System Design',
-    rating_avg: 4.8,
-    rating_count: 12,
-  },
-  {
-    id: 'demo-bob',
-    name: 'Bob Smith',
-    email: 'bob@hiresphere.com',
-    role: 'interviewer',
-    bio: 'Staff Engineer at Meta.',
-    company: 'Meta',
-    skills: 'React, Node.js, Frontend',
-    rate: 70,
-    domain: 'Frontend',
-    interview_types: 'DSA, Behavioral',
-    experience_level: 'Staff',
-    availability: 'Weekends',
-    badges: 'React,Behavioral,Highly Rated',
-    rating_avg: 4.6,
-    rating_count: 8,
-  },
-  {
-    id: 'demo-carol',
-    name: 'Carol Lee',
-    email: 'carol@hiresphere.com',
-    role: 'interviewer',
-    bio: 'Principal Engineer at Amazon.',
-    company: 'Amazon',
-    skills: 'System Design, Cloud, AWS',
-    rate: 90,
-    domain: 'DevOps',
-    interview_types: 'System Design, Behavioral',
-    experience_level: 'Principal',
-    availability: 'Flexible',
-    badges: 'AWS,Principal,Expert',
-    rating_avg: 4.9,
-    rating_count: 15,
-  },
-  {
-    id: 'demo-damith',
-    name: 'Damith Jayawardhane',
-    email: 'damith@hiresphere.com',
-    role: 'interviewer',
-    bio: 'SLIIT interviewer — cloud & full-stack mock interviews.',
-    company: 'HireSphere',
-    skills: 'Java, React, AWS, System Design',
-    rate: 65,
-    domain: 'Backend',
-    interview_types: 'DSA, Behavioral, System Design',
-    experience_level: 'Senior',
-    availability: 'Weekday evenings',
-    badges: 'Cloud,Backend',
-    rating_avg: 4.5,
-    rating_count: 3,
-  },
-]
-
 function mergeRatings(users, ratingsMap) {
   return users.map(u => {
     const r = ratingsMap[u.id] || {}
@@ -101,6 +29,31 @@ function mergeRatings(users, ratingsMap) {
   })
 }
 
+/** Unique filter values from interviewer records in the database. */
+export function collectFilterOptions(interviewers) {
+  const domains = new Set()
+  const levels = new Set()
+  const types = new Set()
+  for (const iv of interviewers) {
+    if (iv.domain) domains.add(iv.domain)
+    if (iv.experience_level) levels.add(iv.experience_level)
+    parseInterviewTypes(iv.interview_types).forEach(t => types.add(t))
+  }
+  return {
+    domains: ['', ...[...domains].sort()],
+    levels: ['', ...[...levels].sort()],
+    types: ['', ...[...types].sort()],
+  }
+}
+
+export function parseInterviewTypes(raw) {
+  if (!raw) return []
+  return raw
+    .split(/[,;|]/)
+    .map(s => s.trim())
+    .filter(Boolean)
+}
+
 export function setApiAuthToken(token) {
   if (token) api.defaults.headers.common.Authorization = `Bearer ${token}`
   else delete api.defaults.headers.common.Authorization
@@ -112,33 +65,21 @@ export function isLocalDev() {
   return h === 'localhost' || h === '127.0.0.1'
 }
 
-export function isCloudAmplifyHost() {
-  if (typeof window === 'undefined') return false
-  return window.location.hostname.includes('amplifyapp.com')
+/** Interviewers + ratings from auth-service / interview-service (no mock fallback). */
+export async function fetchInterviewers() {
+  const [usersRes, ratingsRes] = await Promise.all([
+    api.get('/auth/users', { params: { role: 'interviewer' } }),
+    api.get('/ratings/interviewers').catch(() => ({ data: {} })),
+  ])
+  const list = Array.isArray(usersRes.data) ? mergeRatings(usersRes.data, ratingsRes.data || {}) : []
+  return { list, filters: collectFilterOptions(list) }
 }
 
-/** Real data from auth-service; demo list only on cloud when ALB API is unreachable. */
-export async function fetchInterviewers() {
+export async function fetchFeedbackForBooking(bookingId) {
   try {
-    const [usersRes, ratingsRes] = await Promise.all([
-      api.get('/auth/users', { params: { role: 'interviewer' } }),
-      api.get('/ratings/interviewers').catch(() => ({ data: {} })),
-    ])
-    if (Array.isArray(usersRes.data)) {
-      return { list: mergeRatings(usersRes.data, ratingsRes.data || {}), demo: false }
-    }
-  } catch (err) {
-    if (isLocalDev()) {
-      throw new Error(
-        'Cannot reach API at ' +
-          (API_BASE || 'localhost') +
-          '. Run: docker compose up -d (gateway http://localhost:8080)'
-      )
-    }
-    if (isCloudAmplifyHost()) {
-      return { list: DEMO_INTERVIEWERS, demo: true }
-    }
-    throw err
+    const res = await api.get(`/feedback/booking/${bookingId}`)
+    return res.data
+  } catch {
+    return null
   }
-  return { list: [], demo: false }
 }

@@ -1,81 +1,80 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
+
+const LINKS = {
+  candidate: [
+    { to: '/dashboard', label: 'Dashboard' },
+    { to: '/interviewers', label: 'Interviewers' },
+    { to: '/bookings', label: 'My Sessions' },
+    { to: '/submissions', label: 'Submissions' },
+    { to: '/messages', label: 'Messages' },
+  ],
+  interviewer: [
+    { to: '/dashboard', label: 'Dashboard' },
+    { to: '/bookings', label: 'Bookings' },
+    { to: '/submissions', label: 'Reviews' },
+    { to: '/packages', label: 'Packages' },
+    { to: '/messages', label: 'Messages' },
+  ],
+}
 
 export default function Navbar() {
   const { user, signOut } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
-
-  const isActive = (path) => location.pathname.startsWith(path)
-    ? { color: 'var(--accent)', borderBottom: '2px solid var(--accent)' }
-    : {}
 
   function handleSignOut() {
     signOut()
     navigate('/login')
   }
 
+  const links = user ? LINKS[user.role] || LINKS.candidate : []
+
   return (
-    <nav style={{
-      background: 'var(--surface)',
-      borderBottom: '1px solid var(--border)',
-      padding: '0 24px',
-      display: 'flex',
-      alignItems: 'center',
-      height: 60,
-      gap: 32,
-      position: 'sticky',
-      top: 0,
-      zIndex: 100
-    }}>
-      <Link to="/" style={{ fontFamily: 'var(--font-head)', fontWeight: 800, fontSize: 20, color: 'var(--accent)', letterSpacing: '-0.5px', textDecoration: 'none' }}>
-        Hire<span style={{ color: 'var(--accent2)' }}>Sphere</span>
+    <nav className="navbar">
+      <Link to="/dashboard" className="navbar-brand">
+        Hire<span>Sphere</span>
       </Link>
 
       {user && (
-        <div style={{ display: 'flex', gap: 4, flex: 1, alignItems: 'center' }}>
-          <Link to="/dashboard" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/dashboard') }}>Dashboard</Link>
-          {user.role === 'candidate' && (
-            <Link to="/interviewers" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/interviewers') }}>Find Interviewers</Link>
-          )}
-          <Link to="/bookings" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/bookings') }}>
-            {user.role === 'candidate' ? 'My Sessions' : 'Bookings'}
-          </Link>
-          <Link to="/messages" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/messages') }}>
-            Messages
-          </Link>
-          {user.role === 'candidate' && (
-            <Link to="/submissions" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/submissions') }}>
-              Submissions
+        <div className="navbar-links">
+          {links.map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              className={`nav-link${location.pathname.startsWith(to) ? ' active' : ''}`}
+            >
+              {label}
             </Link>
-          )}
-          {user.role === 'interviewer' && (
-            <>
-              <Link to="/submissions" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/submissions') }}>
-                Review Submissions
-              </Link>
-              <Link to="/packages" style={{ padding: '18px 12px', fontSize: 14, color: 'var(--text)', textDecoration: 'none', ...isActive('/packages') }}>
-                Packages
-              </Link>
-            </>
-          )}
+          ))}
         </div>
       )}
 
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="navbar-user">
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={toggleTheme}
+          title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          aria-label="Toggle theme"
+        >
+          {theme === 'light' ? '🌙' : '☀️'}
+        </button>
         {user ? (
           <>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+            <span className="navbar-user-name">
               {user.name} · <span className={`badge badge-${user.role}`}>{user.role}</span>
             </span>
-            <button className="btn btn-outline" style={{ padding: '6px 14px', fontSize: 13 }} onClick={handleSignOut}>
-              Sign Out
+            <button type="button" className="btn btn-outline btn-sm" onClick={handleSignOut}>
+              Sign out
             </button>
           </>
         ) : (
           <>
-            <Link to="/login"><button className="btn btn-outline" style={{ padding: '6px 14px', fontSize: 13 }}>Login</button></Link>
-            <Link to="/register"><button className="btn btn-primary" style={{ padding: '6px 14px', fontSize: 13 }}>Register</button></Link>
+            <Link to="/login" className="btn btn-ghost btn-sm">Log in</Link>
+            <Link to="/register" className="btn btn-primary btn-sm">Register</Link>
           </>
         )}
       </div>

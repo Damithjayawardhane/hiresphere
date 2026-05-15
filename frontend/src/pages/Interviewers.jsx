@@ -1,40 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { fetchInterviewers } from '../api'
-
-const DOMAINS = ['', 'Backend', 'Frontend', 'DevOps', 'AI/ML', 'Mobile']
-const LEVELS = ['', 'Senior', 'Staff', 'Principal']
-
-function Stars({ avg }) {
-  if (avg == null) return null
-  const full = Math.round(avg)
-  return (
-    <span style={{ color: '#fbbf24', fontSize: 13, letterSpacing: 1 }} title={`${avg} / 5`}>
-      {'★'.repeat(full)}
-      {'☆'.repeat(5 - full)}
-      <span style={{ color: 'var(--muted)', marginLeft: 6, letterSpacing: 0 }}>{avg}</span>
-    </span>
-  )
-}
-
-function BadgeList({ badges }) {
-  if (!badges) return null
-  const list = badges.split(',').map(s => s.trim()).filter(Boolean)
-  if (!list.length) return null
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {list.map(b => (
-        <span key={b} style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--success)', padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-          {b}
-        </span>
-      ))}
-    </div>
-  )
-}
+import InterviewerCard from '../components/InterviewerCard'
+import Loading from '../components/Loading'
+import PageHeader from '../components/PageHeader'
+import { API_BASE } from '../api'
 
 export default function Interviewers() {
   const [interviewers, setInterviewers] = useState([])
-  const [usingDemo, setUsingDemo] = useState(false)
+  const [filters, setFilters] = useState({ domains: [''], levels: [''], types: [''] })
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [domain, setDomain] = useState('')
@@ -44,13 +17,17 @@ export default function Interviewers() {
 
   useEffect(() => {
     fetchInterviewers()
-      .then(({ list, demo }) => {
+      .then(({ list, filters: f }) => {
         setInterviewers(list)
-        setUsingDemo(demo)
+        setFilters(f)
       })
       .catch(err => {
         setInterviewers([])
-        setError(err.message || 'Failed to load interviewers')
+        setError(
+          err.response?.data?.error ||
+            err.message ||
+            `Cannot load interviewers from API (${API_BASE || 'not configured'}).`
+        )
       })
       .finally(() => setLoading(false))
   }, [])
@@ -68,139 +45,68 @@ export default function Interviewers() {
     return true
   })
 
-  if (loading) return <div className="page" style={{ color: 'var(--muted)' }}>Loading interviewers...</div>
+  if (loading) {
+    return (
+      <div className="page">
+        <Loading label="Loading interviewers from database…" />
+      </div>
+    )
+  }
 
   return (
     <div className="page">
-      <h1 className="page-title">Find an Interviewer</h1>
-      <p style={{ color: 'var(--muted)', marginBottom: 20, maxWidth: 720 }}>
-        Filter by domain, interview type, and experience level (assignment-aligned search).
-      </p>
+      <PageHeader
+        title="Find an interviewer"
+        subtitle="Browse experts from the database — filter by domain, session type, and experience."
+      />
 
-      {error && <p className="error-msg" style={{ marginBottom: 16 }}>{error}</p>}
+      {error && <div className="alert alert-error">{error}</div>}
 
-      {usingDemo && (
-        <div
-          style={{
-            background: 'rgba(108,99,255,0.08)',
-            border: '1px solid rgba(108,99,255,0.2)',
-            borderRadius: 8,
-            padding: '12px 16px',
-            marginBottom: 20,
-            fontSize: 13,
-            color: 'var(--muted)',
-          }}
-        >
-          <strong style={{ color: 'var(--accent)' }}>Demo mode:</strong> Cloud UI cannot reach the ALB API yet.
-          Try search <strong>Damith</strong>, <strong>Alice</strong>, or <strong>Google</strong>.
-          For full search with your database, run locally: <code>docker compose up</code> and{' '}
-          <code>npm run dev</code>.
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24, alignItems: 'flex-end' }}>
-        <div className="form-group" style={{ marginBottom: 0, minWidth: 200, flex: '1 1 200px' }}>
-          <label style={{ fontSize: 12 }}>Search</label>
+      <div className="filters-bar">
+        <div className="form-group">
+          <label>Search</label>
           <input placeholder="Name, skill, company…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <div className="form-group" style={{ marginBottom: 0, minWidth: 140 }}>
-          <label style={{ fontSize: 12 }}>Domain</label>
+        <div className="form-group">
+          <label>Domain</label>
           <select value={domain} onChange={e => setDomain(e.target.value)}>
-            {DOMAINS.map(d => (
-              <option key={d || 'any'} value={d}>
-                {d || 'Any'}
-              </option>
+            {filters.domains.map(d => (
+              <option key={d || 'any'} value={d}>{d || 'Any domain'}</option>
             ))}
           </select>
         </div>
-        <div className="form-group" style={{ marginBottom: 0, minWidth: 140 }}>
-          <label style={{ fontSize: 12 }}>Interview type</label>
-          <input
-            placeholder="DSA, Behavioral…"
-            value={interviewType}
-            onChange={e => setInterviewType(e.target.value)}
-            style={{ minWidth: 140 }}
-          />
+        <div className="form-group">
+          <label>Session type</label>
+          <select value={interviewType} onChange={e => setInterviewType(e.target.value)}>
+            {filters.types.map(t => (
+              <option key={t || 'any'} value={t}>{t || 'Any type'}</option>
+            ))}
+          </select>
         </div>
-        <div className="form-group" style={{ marginBottom: 0, minWidth: 140 }}>
-          <label style={{ fontSize: 12 }}>Experience</label>
+        <div className="form-group">
+          <label>Experience</label>
           <select value={experienceLevel} onChange={e => setExperienceLevel(e.target.value)}>
-            {LEVELS.map(l => (
-              <option key={l || 'any'} value={l}>
-                {l || 'Any'}
-              </option>
+            {filters.levels.map(l => (
+              <option key={l || 'any'} value={l}>{l || 'Any level'}</option>
             ))}
           </select>
         </div>
       </div>
 
-      {filtered.length === 0 && (
-        <p style={{ color: 'var(--muted)' }}>
-          No interviewers match your filters.
-          {usingDemo && search ? ' Try Alice, Bob, or Carol.' : ''}
-        </p>
+      {filtered.length === 0 ? (
+        <div className="card empty-state">
+          <p>No interviewers match your filters.</p>
+          {interviewers.length === 0 && !error && (
+            <p style={{ marginTop: 8, fontSize: 13 }}>Register as an interviewer or seed the auth-service database.</p>
+          )}
+        </div>
+      ) : (
+        <div className="grid-2">
+          {filtered.map(iv => (
+            <InterviewerCard key={iv.id} interviewer={iv} />
+          ))}
+        </div>
       )}
-
-      <div className="grid-2">
-        {filtered.map(iv => (
-          <div key={iv.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: 17 }}>{iv.name}</div>
-                {iv.company && <div style={{ color: 'var(--accent)', fontSize: 13, marginTop: 2 }}>{iv.company}</div>}
-                {(iv.rating_avg != null || iv.rating_count > 0) && (
-                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <Stars avg={iv.rating_avg} />
-                    {iv.rating_count > 0 && (
-                      <span style={{ fontSize: 12, color: 'var(--muted)' }}>({iv.rating_count} reviews)</span>
-                    )}
-                  </div>
-                )}
-              </div>
-              {iv.rate != null && (
-                <div style={{ color: 'var(--success)', fontWeight: 600, fontSize: 15 }}>
-                  ${iv.rate}
-                  <div style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>/hr</div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12 }}>
-              {iv.domain && <span className="badge badge-interviewer">{iv.domain}</span>}
-              {iv.experience_level && <span style={{ color: 'var(--muted)' }}>{iv.experience_level}</span>}
-            </div>
-            <BadgeList badges={iv.badges} />
-
-            {iv.availability && (
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                <strong style={{ color: 'var(--text)' }}>Availability:</strong> {iv.availability}
-              </div>
-            )}
-
-            {iv.bio && (
-              <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.5 }}>
-                {iv.bio}
-              </p>
-            )}
-
-            {iv.skills && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {iv.skills.split(',').map(s => (
-                  <span key={s} style={{ background: 'rgba(108,99,255,0.1)', color: 'var(--accent)', padding: '2px 10px', borderRadius: 20, fontSize: 12 }}>
-                    {s.trim()}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <Link to={`/book/${iv.id}`} style={{ marginTop: 'auto' }}>
-              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-                Book Session
-              </button>
-            </Link>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

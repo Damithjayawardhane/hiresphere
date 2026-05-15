@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Loading from '../components/Loading'
+import PageHeader from '../components/PageHeader'
 
 export default function Submissions() {
   const { user } = useAuth()
@@ -23,7 +24,7 @@ export default function Submissions() {
     if (isInterviewer) reqs.push(api.get('/auth/users').catch(() => ({ data: [] })))
     Promise.all(reqs)
       .then(([subRes, usersRes]) => {
-        setItems(subRes.data)
+        setItems(subRes.data || [])
         if (usersRes?.data) {
           const map = {}
           usersRes.data.forEach(u => {
@@ -32,12 +33,16 @@ export default function Submissions() {
           setUsers(map)
         }
       })
-      .catch(() => {})
+      .catch(() => setError('Could not load submissions from database.'))
       .finally(() => setLoading(false))
   }, [isInterviewer])
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!githubUrl && !file) {
+      setError('Add a GitHub URL or upload a file.')
+      return
+    }
     setError('')
     setSaving(true)
     try {
@@ -72,116 +77,150 @@ export default function Submissions() {
     }
   }
 
-  if (loading) return <div className="page" style={{ color: 'var(--muted)' }}>Loading...</div>
+  if (loading) {
+    return (
+      <div className="page">
+        <Loading label="Loading submissions…" />
+      </div>
+    )
+  }
 
   return (
     <div className="page">
-      <h1 className="page-title">
-        {isInterviewer ? 'Review submissions' : 'Coding challenge submissions'}
-      </h1>
-      <p style={{ color: 'var(--muted)', marginBottom: 24, maxWidth: 640 }}>
-        {isInterviewer
-          ? 'Review candidate solutions and add annotations (assignment requirement).'
-          : 'Submit a solution via GitHub link and/or file upload.'}
-      </p>
+      <PageHeader
+        title={isInterviewer ? 'Review submissions' : 'Coding submissions'}
+        subtitle={
+          isInterviewer
+            ? 'Review candidate solutions and add annotations — stored in the interview service database.'
+            : 'Submit solutions via GitHub or file upload for your interviewer to review.'
+        }
+      />
+
+      {error && !annotateId && <div className="alert alert-error">{error}</div>}
 
       {!isInterviewer && (
-        <div className="card" style={{ maxWidth: 560, marginBottom: 32 }}>
-          <h2 style={{ fontFamily: 'var(--font-head)', fontSize: 16, marginBottom: 16 }}>New submission</h2>
+        <div className="card" style={{ maxWidth: 580, marginBottom: 32 }}>
+          <h2 className="section-title" style={{ marginBottom: 16 }}>New submission</h2>
           <form onSubmit={handleSubmit}>
             <div className="form-group">
               <label>GitHub repository or gist URL</label>
-              <input placeholder="https://github.com/you/challenge-solution" value={githubUrl} onChange={e => setGithubUrl(e.target.value)} />
+              <input
+                placeholder="https://github.com/you/solution"
+                value={githubUrl}
+                onChange={e => setGithubUrl(e.target.value)}
+              />
             </div>
             <div className="form-group">
-              <label>File (optional)</label>
+              <label>File upload</label>
+              <div className="upload-zone">
+                {file ? (
+                  <span>Selected: <strong>{file.name}</strong></span>
+                ) : (
+                  <span>Choose a .zip, .py, .js, or other solution file</span>
+                )}
+              </div>
               <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
             </div>
             <div className="form-group">
-              <label>Notes (optional)</label>
-              <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Language, approach, assumptions..." />
+              <label>Notes</label>
+              <textarea
+                rows={3}
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Language, approach, time complexity…"
+              />
             </div>
             {error && <p className="error-msg">{error}</p>}
             <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Submitting...' : 'Submit'}
+              {saving ? 'Submitting…' : 'Submit to database'}
             </button>
           </form>
         </div>
       )}
 
-      <h2 style={{ fontFamily: 'var(--font-head)', fontSize: 18, marginBottom: 12 }}>
-        {isInterviewer ? 'All submissions' : 'Your history'}
-      </h2>
-      {items.length === 0 && <p style={{ color: 'var(--muted)' }}>No submissions yet.</p>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {items.map(s => (
-          <div key={s.id} className="card">
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(s.created_at).toLocaleString()}</div>
-            {isInterviewer && (
-              <div style={{ fontSize: 13, marginTop: 4 }}>
-                Candidate: <strong>{users[s.candidate_id]?.name || s.candidate_id}</strong>
-              </div>
-            )}
-            {s.github_url && (
-              <div style={{ marginTop: 6 }}>
-                <a href={s.github_url} target="_blank" rel="noopener noreferrer">{s.github_url}</a>
-              </div>
-            )}
-            {s.file_name && <div style={{ marginTop: 4 }}>File: {s.file_name}</div>}
-            {s.notes && <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 14 }}>{s.notes}</div>}
-            {s.annotation && (
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: 12,
-                  background: 'rgba(34,197,94,0.08)',
-                  borderRadius: 8,
-                  border: '1px solid rgba(34,197,94,0.2)',
-                }}
-              >
-                <div style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600, marginBottom: 4 }}>Interviewer annotation</div>
-                <div style={{ fontSize: 14 }}>{s.annotation}</div>
-                {s.annotated_at && (
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>{new Date(s.annotated_at).toLocaleString()}</div>
-                )}
-              </div>
-            )}
-            {isInterviewer && (
-              <div style={{ marginTop: 12 }}>
-                {annotateId === s.id ? (
-                  <>
-                    <textarea
-                      rows={3}
-                      value={annotateText}
-                      onChange={e => setAnnotateText(e.target.value)}
-                      placeholder="Feedback on approach, correctness, style..."
-                      style={{ width: '100%', marginBottom: 8 }}
-                    />
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className="btn btn-primary" style={{ fontSize: 13 }} disabled={annotating} onClick={() => saveAnnotation(s.id)}>
-                        {annotating ? 'Saving…' : 'Save annotation'}
-                      </button>
-                      <button type="button" className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => setAnnotateId(null)}>
-                        Cancel
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <button type="button" className="btn btn-outline" style={{ fontSize: 13 }} onClick={() => { setAnnotateId(s.id); setAnnotateText(s.annotation || '') }}>
-                    {s.annotation ? 'Edit annotation' : 'Add annotation'}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+      <h2 className="section-title">{isInterviewer ? 'All candidate submissions' : 'Your submission history'}</h2>
 
-      {error && isInterviewer && <p className="error-msg" style={{ marginTop: 12 }}>{error}</p>}
+      {items.length === 0 ? (
+        <div className="card empty-state">
+          <p>No submissions yet.</p>
+        </div>
+      ) : (
+        <div className="submission-list">
+          {items.map(s => (
+            <article key={s.id} className="card submission-card">
+              <p className="submission-meta">{new Date(s.created_at).toLocaleString()}</p>
+              {isInterviewer && (
+                <p style={{ fontSize: 14, marginBottom: 8 }}>
+                  Candidate: <strong>{users[s.candidate_id]?.name || s.candidate_id}</strong>
+                </p>
+              )}
+              {s.github_url && (
+                <a className="submission-link" href={s.github_url} target="_blank" rel="noopener noreferrer">
+                  {s.github_url}
+                </a>
+              )}
+              {s.file_name && (
+                <p style={{ marginTop: 8, fontSize: 14 }}>
+                  <span className="badge badge-confirmed">file</span> {s.file_name}
+                </p>
+              )}
+              {s.notes && <p className="submission-notes">{s.notes}</p>}
 
-      <p style={{ marginTop: 24 }}>
-        <Link to="/dashboard">← Dashboard</Link>
-      </p>
+              {s.annotation && (
+                <div className="annotation-box">
+                  <div className="annotation-box-label">Interviewer feedback</div>
+                  <p style={{ fontSize: 14, lineHeight: 1.5 }}>{s.annotation}</p>
+                  {s.annotated_at && (
+                    <p className="submission-meta" style={{ marginTop: 8, marginBottom: 0 }}>
+                      {new Date(s.annotated_at).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {isInterviewer && (
+                <div style={{ marginTop: 16 }}>
+                  {annotateId === s.id ? (
+                    <>
+                      <textarea
+                        rows={4}
+                        value={annotateText}
+                        onChange={e => setAnnotateText(e.target.value)}
+                        placeholder="Feedback on approach, correctness, style…"
+                        style={{ marginBottom: 10 }}
+                      />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          disabled={annotating}
+                          onClick={() => saveAnnotation(s.id)}
+                        >
+                          {annotating ? 'Saving…' : 'Save annotation'}
+                        </button>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => setAnnotateId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => {
+                        setAnnotateId(s.id)
+                        setAnnotateText(s.annotation || '')
+                      }}
+                    >
+                      {s.annotation ? 'Edit annotation' : 'Add annotation'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,7 @@
 # HireSphere — Viva quick checklist
 
+> **Full demo script + Sinhala speaker notes:** see [`VIVA-DEMO-GUIDE.md`](VIVA-DEMO-GUIDE.md)
+
 ## Before viva
 
 - [ ] `aws cloudformation describe-stacks --stack-name hiresphere --query Stacks[0].StackStatus`
