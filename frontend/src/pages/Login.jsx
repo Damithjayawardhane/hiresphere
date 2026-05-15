@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { signIn, useCognito } = useAuth()
+  const { signIn, signOut, useCognito, user } = useAuth()
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [form, setForm] = useState({ email: '', password: '' })
@@ -16,6 +16,10 @@ export default function Login() {
       if (em) setForm(f => ({ ...f, email: decodeURIComponent(em) }))
     }
   }, [params])
+
+  useEffect(() => {
+    if (user) navigate('/dashboard', { replace: true })
+  }, [user, navigate])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -77,7 +81,24 @@ export default function Login() {
               <label>Password</label>
               <input type="password" placeholder="••••••••" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required />
             </div>
-            {error && <p className="error-msg">{error}</p>}
+            {error && (
+              <>
+                <p className="error-msg">{error}</p>
+                {error.includes('already a signed in user') && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ width: '100%', marginBottom: 8, justifyContent: 'center' }}
+                    onClick={() => {
+                      signOut()
+                      setError('')
+                    }}
+                  >
+                    Clear session and try again
+                  </button>
+                )}
+              </>
+            )}
             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: 8, justifyContent: 'center' }} disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

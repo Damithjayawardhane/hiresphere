@@ -6,6 +6,7 @@ import {
   signOut as amplifySignOut,
   fetchAuthSession,
   confirmSignUp,
+  getCurrentUser,
 } from 'aws-amplify/auth'
 import { configureAmplify, isCognitoConfigured } from '../amplify-config'
 
@@ -27,6 +28,40 @@ async function syncCognitoProfile(idToken, body = {}) {
   return res.data.user
 }
 
+async function clearCognitoSession() {
+  try {
+    await amplifySignOut({ global: true })
+  } catch {
+    /* no session */
+  }
+}
+
+function isAlreadySignedInError(err) {
+  const msg = err?.message ?? ''
+  return (
+    err?.name === 'UserAlreadyAuthenticatedException' ||
+    msg.includes('already a signed in user')
+  )
+}
+
+async function cognitoSignIn(email, password) {
+  try {
+    await amplifySignIn({
+      username: email,
+      password,
+      options: { authFlowType: 'USER_PASSWORD_AUTH' },
+    })
+  } catch (err) {
+    if (!isAlreadySignedInError(err)) throw err
+    await clearCognitoSession()
+    await amplifySignIn({
+      username: email,
+      password,
+      options: { authFlowType: 'USER_PASSWORD_AUTH' },
+    })
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(null)
@@ -44,11 +79,15 @@ export function AuthProvider({ children }) {
           const session = await fetchAuthSession()
           const idToken = authHeaderFromSession(session)
           if (idToken) {
-            const u = await syncCognitoProfile(idToken, {})
-            if (!cancelled) {
-              setToken(idToken)
-              setUser(u)
-              axios.defaults.headers.common['Authorization'] = `Bearer ${idToken}`
+            try {
+              const u = await syncCognitoProfile(idToken, {})
+              if (!cancelled) {
+                setToken(idToken)
+                setUser(u)
+                axios.defaults.headers.common['Authorization'] = `Bearer ${idToken}`
+              }
+            } catch {
+              await clearCognitoSession()
             }
           }
         } catch {
@@ -101,11 +140,7 @@ export function AuthProvider({ children }) {
       }
       sessionStorage.setItem('pendingCognitoProfile', JSON.stringify(profile))
       if (isSignUpComplete) {
-        await amplifySignIn({
-          username: email,
-          password,
-          options: { authFlowType: 'USER_PASSWORD_AUTH' },
-        })
+        await cognitoSignIn(email, password)
         const session = await fetchAuthSession()
         const idToken = authHeaderFromSession(session)
         if (!idToken) throw new Error('No session after sign-up')
@@ -139,11 +174,13 @@ export function AuthProvider({ children }) {
 
   async function signIn(email, password) {
     if (useCognito) {
-      await amplifySignIn({
-        username: email,
-        password,
-        options: { authFlowType: 'USER_PASSWORD_AUTH' },
-      })
+      try {
+        await getCurrentUser()
+        await clearCognitoSession()
+      } catch {
+        /* not signed in */
+      }
+      await cognitoSignIn(email, password)
       const session = await fetchAuthSession()
       const idToken = authHeaderFromSession(session)
       if (!idToken) throw new Error('No ID token')
@@ -168,7 +205,7 @@ export function AuthProvider({ children }) {
 
   function signOut() {
     if (useCognito) {
-      amplifySignOut().catch(() => {})
+      clearCognitoSession()
     }
     localStorage.removeItem('hs_token')
     localStorage.removeItem('hs_user')
