@@ -1,6 +1,9 @@
 # HireSphere — Viva quick checklist
 
-> **Full demo script + Sinhala speaker notes:** see [`VIVA-DEMO-GUIDE.md`](VIVA-DEMO-GUIDE.md)
+> **Full demo script + Sinhala speaker notes:** see [`VIVA-DEMO-GUIDE.md`](VIVA-DEMO-GUIDE.md)  
+> **Demo from VS Code:** see [`VS-CODE-DEMO.md`](VS-CODE-DEMO.md)  
+> **~30 min word-by-word speech:** see [`VIVA-SPEECH-SCRIPT-30MIN.md`](VIVA-SPEECH-SCRIPT-30MIN.md)  
+> **Code flow & viva Q&A:** see [`VIVA-CODE-FLOW.md`](VIVA-CODE-FLOW.md)
 
 ## Before viva
 

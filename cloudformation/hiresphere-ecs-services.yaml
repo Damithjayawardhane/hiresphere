@@ -109,6 +109,13 @@ Resources:
       HealthCheckIntervalSeconds: 30
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '86400'
 
   # HTTP listener — CloudFront origin + health checks
   ALBHTTPListener:
@@ -339,6 +346,7 @@ Resources:
       IntegrationMethod: ANY
       IntegrationUri: !Sub http://${LoadBalancerDnsName}/{proxy}
       PayloadFormatVersion: '1.0'
+      TimeoutInMillis: 30000
 
   AlbProxyRoute:
     Type: AWS::ApiGatewayV2::Route

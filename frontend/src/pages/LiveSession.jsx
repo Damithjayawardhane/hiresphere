@@ -25,6 +25,30 @@ function getSocketBaseUrl() {
   return undefined
 }
 
+/** API Gateway HTTP APIs don't reliably upgrade WebSocket; Engine.IO polling works through HTTPS proxy. */
+function buildSocketOptions(baseUrl) {
+  const b = baseUrl || ''
+  const viaAwsHttpProxy =
+    b.includes('execute-api.') ||
+    (b.includes('amazonaws.com') && !b.includes('elb.amazonaws.com'))
+  if (viaAwsHttpProxy) {
+    return {
+      path: '/socket.io',
+      transports: ['polling'],
+      upgrade: false,
+      rememberUpgrade: false,
+      withCredentials: false,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1500,
+    }
+  }
+  return {
+    path: '/socket.io',
+    transports: ['websocket', 'polling'],
+    reconnectionAttempts: 10,
+  }
+}
+
 export default function LiveSession() {
   const { bookingId } = useParams()
   const { user } = useAuth()
@@ -56,7 +80,7 @@ export default function LiveSession() {
       }
     }
     pc.onicecandidate = ev => {
-      if (ev.candidate && socketRef.current) {
+      if (ev.candidate && socketRef.current?.connected) {
         socketRef.current.emit('webrtc_ice', { room: bookingId, candidate: ev.candidate.toJSON() })
       }
     }
@@ -99,13 +123,21 @@ export default function LiveSession() {
     await pc.setRemoteDescription(new RTCSessionDescription(sdp))
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
-    socketRef.current?.emit('webrtc_answer', { room: bookingId, sdp: answer })
+    if (!socketRef.current?.connected) {
+      setRtcHint('Lost signaling connection — cannot send WebRTC answer.')
+      return
+    }
+    socketRef.current.emit('webrtc_answer', { room: bookingId, sdp: answer })
     setRtcHint('Answer sent — establishing WebRTC…')
   }
 
   acceptRemoteOfferRef.current = acceptRemoteOffer
 
   const sendOffer = async () => {
+    if (!socketRef.current?.connected) {
+      setRtcHint('Wait until session shows Connected — signaling uses Socket.IO.')
+      return
+    }
     if (!localStreamRef.current) {
       setRtcHint('Enable camera first.')
       return
@@ -113,20 +145,29 @@ export default function LiveSession() {
     const pc = setupPeerConnection()
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
-    socketRef.current?.emit('webrtc_offer', { room: bookingId, sdp: offer })
+    socketRef.current.emit('webrtc_offer', { room: bookingId, sdp: offer })
     setRtcHint('Offer sent — waiting for peer answer.')
   }
 
   useEffect(() => {
     const base = getSocketBaseUrl()
-    const socket = io(base, { path: '/socket.io', transports: ['websocket', 'polling'] })
+    const opts = buildSocketOptions(base)
+    const socket = io(base, opts)
     socketRef.current = socket
 
     socket.on('connect', () => {
       setConnected(true)
+      setRtcHint('')
       socket.emit('join_session', { room: bookingId, user: user?.name, sid: socket.id })
     })
-    socket.on('disconnect', () => setConnected(false))
+    socket.on('disconnect', reason => {
+      setConnected(false)
+      setRtcHint(`Disconnected (${reason}). Reconnecting…`)
+    })
+    socket.on('connect_error', err => {
+      setConnected(false)
+      setRtcHint(`Cannot reach session server: ${err?.message || err}. Check API ${base || 'URL'}.`)
+    })
     socket.on('user_joined', ({ user: u }) => {
       setParticipants(p => [...new Set([...p, u])])
       setMessages(m => [...m, { system: true, text: `${u} joined` }])
@@ -181,20 +222,29 @@ export default function LiveSession() {
   function handleCodeChange(e) {
     const newCode = e.target.value
     setCode(newCode)
-    socketRef.current?.emit('code_change', { room: bookingId, code: newCode, language, user: user?.name })
+    const s = socketRef.current
+    if (!s?.connected) return
+    s.emit('code_change', { room: bookingId, code: newCode, language, user: user?.name })
   }
 
   function handleLanguageChange(lang) {
     setLanguage(lang)
     const newCode = STARTERS[lang]
     setCode(newCode)
-    socketRef.current?.emit('code_change', { room: bookingId, code: newCode, language: lang, user: user?.name })
+    const s = socketRef.current
+    if (!s?.connected) return
+    s.emit('code_change', { room: bookingId, code: newCode, language: lang, user: user?.name })
   }
 
   function sendMessage(e) {
     e.preventDefault()
     if (!msgInput.trim()) return
-    socketRef.current?.emit('chat_message', { room: bookingId, message: msgInput, user: user?.name })
+    const s = socketRef.current
+    if (!s?.connected) {
+      setRtcHint('Session socket not connected — wait for green “Connected” before sending chat.')
+      return
+    }
+    s.emit('chat_message', { room: bookingId, message: msgInput, user: user?.name })
     setMessages(m => [
       ...m,
       { message: msgInput, user: user?.name, timestamp: new Date().toISOString(), self: true },
@@ -264,12 +314,15 @@ export default function LiveSession() {
                   setTimeout(() => {
                     e.target.selectionStart = e.target.selectionEnd = s + 2
                   }, 0)
-                  socketRef.current?.emit('code_change', {
-                    room: bookingId,
-                    code: newVal,
-                    language,
-                    user: user?.name,
-                  })
+                  const sock = socketRef.current
+                  if (sock?.connected) {
+                    sock.emit('code_change', {
+                      room: bookingId,
+                      code: newVal,
+                      language,
+                      user: user?.name,
+                    })
+                  }
                 }
               }}
             />
