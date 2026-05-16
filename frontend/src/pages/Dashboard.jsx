@@ -13,11 +13,10 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.all([
       api.get('/bookings').catch(() => ({ data: [] })),
-      api.get('/messages').catch(() => ({ data: [] })),
       isCandidate ? api.get('/submissions').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       !isCandidate ? api.get('/packages').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
     ])
-      .then(([bookingsRes, messagesRes, subsRes, pkgRes]) => {
+      .then(([bookingsRes, subsRes, pkgRes]) => {
         const bookings = bookingsRes.data || []
         const upcoming = bookings.filter(b => !['completed', 'cancelled'].includes(b.status)).length
         const completed = bookings.filter(b => b.status === 'completed').length
@@ -25,7 +24,6 @@ export default function Dashboard() {
           bookings: bookings.length,
           upcoming,
           completed,
-          messages: (messagesRes.data || []).length,
           submissions: (subsRes.data || []).length,
           packages: (pkgRes.data || []).length,
         })

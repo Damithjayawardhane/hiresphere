@@ -20,9 +20,16 @@ function mergeRatings(users, ratingsMap) {
       .filter(Boolean)
     const dynamicBadges = r.badges || []
     const badges = [...new Set([...profileBadges, ...dynamicBadges])]
+    let ratingAvg = r.rating_avg ?? u.rating_avg ?? null
+    if (ratingAvg != null) {
+      const n = Number(ratingAvg)
+      // Legacy rows may still be 0–10; normalize to 0–5 for star UI
+      if (!Number.isNaN(n) && n > 5) ratingAvg = Math.round((n / 2) * 10) / 10
+      ratingAvg = Math.min(5, Math.max(0, ratingAvg))
+    }
     return {
       ...u,
-      rating_avg: r.rating_avg ?? u.rating_avg ?? null,
+      rating_avg: ratingAvg,
       rating_count: r.rating_count ?? u.rating_count ?? 0,
       badges: badges.join(','),
     }

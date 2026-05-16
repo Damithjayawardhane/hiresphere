@@ -1,13 +1,16 @@
 import { Link } from 'react-router-dom'
 
 function Stars({ avg }) {
-  if (avg == null) return null
-  const full = Math.round(avg)
+  if (avg == null || Number.isNaN(Number(avg))) return null
+  // API returns 0–5; clamp so String.repeat never gets a negative count
+  const clamped = Math.min(5, Math.max(0, Number(avg)))
+  const full = Math.min(5, Math.max(0, Math.round(clamped)))
+  const empty = 5 - full
   return (
-    <span className="stars" title={`${avg} / 5`}>
+    <span className="stars" title={`${clamped} / 5`}>
       {'★'.repeat(full)}
-      {'☆'.repeat(5 - full)}
-      <span className="stars-muted">{avg}</span>
+      {'☆'.repeat(empty)}
+      <span className="stars-muted">{clamped}</span>
     </span>
   )
 }

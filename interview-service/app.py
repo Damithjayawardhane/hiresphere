@@ -164,7 +164,9 @@ def interviewer_ratings():
     )
     out = {}
     for iid, avg, cnt in rows:
-        avg_f = round(float(avg or 0), 1)
+        # Feedback scores are 1–10; UI stars use 0–5
+        raw = float(avg or 0)
+        avg_f = round(max(0.0, min(5.0, raw / 2.0)), 1)
         badges = []
         if cnt >= 5:
             badges.append('Top Rated')
@@ -240,9 +242,13 @@ def list_messages():
     if not user:
         return jsonify({'error': 'Unauthorized'}), 401
     other = request.args.get('with')
-    if not other:
-        return jsonify({'error': 'Query parameter "with" (user id) is required'}), 400
     uid = user['sub']
+    if not other:
+        # Dashboard: all messages for this user (no thread filter)
+        rows = Message.query.filter(
+            or_(Message.from_id == uid, Message.to_id == uid)
+        ).order_by(Message.created_at.asc()).all()
+        return jsonify([m.to_dict() for m in rows])
     rows = Message.query.filter(
         or_(
             and_(Message.from_id == uid, Message.to_id == other),
